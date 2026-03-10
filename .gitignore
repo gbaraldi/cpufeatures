@@ -1,0 +1,10 @@
+build/
+*.o
+*.a
+test_standalone
+
+# Build-time generator binary (requires LLVM to build)
+tools/gen_target_tables
+
+# Raw LLVM TableGen .inc files (only the extracted .h tables are committed)
+generated/*.inc

@@ -1,0 +1,51 @@
+# Table generation - requires LLVM.
+# Run this to regenerate the committed generated/ files when updating LLVM.
+#
+# Usage:
+#   make -f Makefile.generate                         # uses system llvm-config
+#   make -f Makefile.generate LLVM_CONFIG=llvm-config-20
+#   make -f Makefile.generate TRIPLES="x86_64-unknown-linux-gnu"
+
+LLVM_CONFIG ?= llvm-config
+LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG) --cxxflags 2>/dev/null)
+LLVM_LDFLAGS := $(shell $(LLVM_CONFIG) --ldflags --libs \
+	mc core support targetparser \
+	x86desc x86info aarch64desc aarch64info riscvdesc riscvinfo \
+	2>/dev/null)
+
+CXX ?= g++
+
+TOOLDIR = tools
+GENDIR = generated
+BUILDDIR = build
+
+TRIPLES ?= x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64-unknown-linux-gnu
+
+GEN_TOOL = $(BUILDDIR)/gen_target_tables
+
+.PHONY: all clean
+
+all: $(patsubst %,$(GENDIR)/target_tables_%.h,$(foreach t,$(TRIPLES),$(word 1,$(subst -, ,$(t)))))
+	@echo ""
+	@echo "Tables regenerated. Review and commit the updated generated/ files:"
+	@ls -1 $(GENDIR)/target_tables_*.h
+
+# Build the generator tool (links LLVM)
+$(GEN_TOOL): $(TOOLDIR)/gen_target_tables.cpp | $(BUILDDIR)
+	$(CXX) $(LLVM_CXXFLAGS) -o $@ $< $(LLVM_LDFLAGS)
+
+# Generate table headers
+$(GENDIR)/target_tables_x86_64.h: $(GEN_TOOL) | $(GENDIR)
+	$(GEN_TOOL) x86_64-unknown-linux-gnu > $@
+
+$(GENDIR)/target_tables_aarch64.h: $(GEN_TOOL) | $(GENDIR)
+	$(GEN_TOOL) aarch64-unknown-linux-gnu > $@
+
+$(GENDIR)/target_tables_riscv64.h: $(GEN_TOOL) | $(GENDIR)
+	$(GEN_TOOL) riscv64-unknown-linux-gnu > $@
+
+$(BUILDDIR) $(GENDIR):
+	mkdir -p $@
+
+clean:
+	rm -f $(GEN_TOOL)

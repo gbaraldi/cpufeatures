@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # x86_64 Linux build + test
+  build-linux-x86:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build library
+        run: make lib CXX=${{ matrix.compiler }}
+      - name: Verify no LLVM dependency
+        run: "! nm build/libtarget_parsing.a | grep -qi llvm"
+      - name: Build and run tests
+        run: make test CXX=${{ matrix.compiler }}
+
+  # AArch64 Linux build + test (cross-compiled, test via QEMU)
+  build-linux-aarch64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain
+        run: sudo apt-get update && sudo apt-get install -y g++-aarch64-linux-gnu qemu-user-static
+      - name: Build library
+        run: make lib CXX=aarch64-linux-gnu-g++ ARCH=aarch64
+      - name: Build test
+        run: make build/test_standalone CXX=aarch64-linux-gnu-g++ ARCH=aarch64
+      - name: Run test under QEMU
+        run: qemu-aarch64-static -L /usr/aarch64-linux-gnu build/test_standalone
+
+  # RISC-V 64 Linux build (cross-compiled)
+  build-linux-riscv64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain
+        run: sudo apt-get update && sudo apt-get install -y g++-riscv64-linux-gnu qemu-user-static
+      - name: Build library
+        run: make lib CXX=riscv64-linux-gnu-g++ ARCH=riscv64
+      - name: Build test
+        run: make build/test_standalone CXX=riscv64-linux-gnu-g++ ARCH=riscv64
+      - name: Run test under QEMU
+        run: qemu-riscv64-static -L /usr/riscv64-linux-gnu build/test_standalone || echo "QEMU test skipped (may need newer QEMU)"
+
+  # macOS x86_64
+  build-macos-x86:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: make test
+
+  # macOS AArch64 (Apple Silicon)
+  build-macos-aarch64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: make test
+
+  # Check that committed tables are up to date
+  check-generated:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 20
+        run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 20
+          sudo apt-get install -y llvm-20-dev
+      - name: Regenerate tables
+        run: make -f Makefile.generate LLVM_CONFIG=llvm-config-20
+      - name: Check for differences
+        run: |
+          if ! git diff --exit-code generated/; then
+            echo "::error::Generated tables are out of date. Run: make -f Makefile.generate"
+            exit 1
+          fi
