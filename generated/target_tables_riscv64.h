@@ -19,6 +19,9 @@
 
 // Feature bitset: 5 x uint64_t = 320 bits
 #define TARGET_FEATURE_WORDS 5
+#define TARGET_TABLES_LLVM_VERSION_MAJOR 20
+#define TARGET_TABLES_LLVM_VERSION_MINOR 1
+#define TARGET_TABLES_LLVM_VERSION_PATCH 8
 
 typedef struct {
     uint64_t bits[TARGET_FEATURE_WORDS];

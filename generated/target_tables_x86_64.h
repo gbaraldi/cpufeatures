@@ -19,6 +19,9 @@
 
 // Feature bitset: 4 x uint64_t = 256 bits
 #define TARGET_FEATURE_WORDS 4
+#define TARGET_TABLES_LLVM_VERSION_MAJOR 20
+#define TARGET_TABLES_LLVM_VERSION_MINOR 1
+#define TARGET_TABLES_LLVM_VERSION_PATCH 8
 
 typedef struct {
     uint64_t bits[TARGET_FEATURE_WORDS];
@@ -303,7 +306,7 @@ static const FeatureEntry feature_table[] = {
     { "amx-tile", "Support AMX-TILE instructions", 10, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "amx-transpose", "Support AMX amx-transpose instructions", 11, 1, { { 0x400ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "avx", "Enable AVX instructions", 12, 1, { { 0x0ULL, 0x20000000000ULL, 0x0ULL, 0x0ULL } } },
-    { "avx10.1-256", "Support AVX10.1 up to 256-bit instruction", 14, 1, { { 0x202000043000000ULL, 0xd70000000000000ULL, 0x0ULL, 0x0ULL } } },
+    { "avx10.1-256", "Support AVX10.1 up to 256-bit instruction", 14, 1, { { 0x202000043000000ULL, 0x960000000000000ULL, 0x0ULL, 0x0ULL } } },
     { "avx10.1-512", "Support AVX10.1 up to 512-bit instruction", 15, 1, { { 0x200000004000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "avx10.2-256", "Support AVX10.2 up to 256-bit instruction", 16, 1, { { 0x4000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "avx10.2-512", "Support AVX10.2 up to 512-bit instruction", 17, 1, { { 0x18000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },

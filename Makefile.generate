@@ -1,39 +1,59 @@
-# Table generation - requires LLVM.
-# Run this to regenerate the committed generated/ files when updating LLVM.
+# Table generation — downloads a pre-built LLVM release and uses it.
 #
 # Usage:
-#   make -f Makefile.generate                         # uses system llvm-config
-#   make -f Makefile.generate LLVM_CONFIG=llvm-config-20
-#   make -f Makefile.generate TRIPLES="x86_64-unknown-linux-gnu"
+#   make -f Makefile.generate                    # download LLVM and generate
+#   make -f Makefile.generate LLVM_PREFIX=/path  # use existing LLVM install
+#
+# The generated headers are committed to the repo. Normal builds don't need this.
 
-LLVM_CONFIG ?= llvm-config
-LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG) --cxxflags 2>/dev/null)
-LLVM_LDFLAGS := $(shell $(LLVM_CONFIG) --ldflags --libs \
-	mc core support targetparser \
-	x86desc x86info aarch64desc aarch64info riscvdesc riscvinfo \
-	2>/dev/null)
-LLVM_SYSTEM_LIBS := $(shell $(LLVM_CONFIG) --system-libs 2>/dev/null)
+LLVM_VER ?= 20.1.8
+LLVM_RELEASE_URL ?= https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VER)/LLVM-$(LLVM_VER)-Linux-X64.tar.xz
 
-CXX ?= g++
+# Use clang++ from the LLVM release (static libs are LLVM bitcode, need LTO-aware linker)
+CXX = $(LLVM_PREFIX)/bin/clang++
 
 TOOLDIR = tools
 GENDIR = generated
 BUILDDIR = build
+LLVM_DL = $(BUILDDIR)/llvm-$(LLVM_VER)
 
-TRIPLES ?= x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu riscv64-unknown-linux-gnu
+# If LLVM_PREFIX is set, use it directly; otherwise download
+LLVM_PREFIX ?= $(LLVM_DL)
+
+LLVM_CONFIG = $(LLVM_PREFIX)/bin/llvm-config
+LLVM_CXXFLAGS = $(shell $(LLVM_CONFIG) --cxxflags 2>/dev/null)
+LLVM_LDFLAGS = $(shell $(LLVM_CONFIG) --ldflags --libs \
+	mc core support targetparser \
+	x86desc x86info aarch64desc aarch64info riscvdesc riscvinfo \
+	2>/dev/null)
+LLVM_SYSTEM_LIBS = $(shell $(LLVM_CONFIG) --system-libs 2>/dev/null)
+LLVM_PREFIX_ABS = $(abspath $(LLVM_PREFIX))
+LLVM_LIBCXX_DIR = $(LLVM_PREFIX_ABS)/lib/x86_64-unknown-linux-gnu
+LLVM_EXTRA_FLAGS = -fuse-ld=lld \
+	-L$(LLVM_PREFIX_ABS)/lib -L$(LLVM_LIBCXX_DIR) \
+	-Wl,-rpath,$(LLVM_PREFIX_ABS)/lib -Wl,-rpath,$(LLVM_LIBCXX_DIR)
 
 GEN_TOOL = $(BUILDDIR)/gen_target_tables
 
-.PHONY: all clean
+.PHONY: all clean download
 
-all: $(patsubst %,$(GENDIR)/target_tables_%.h,$(foreach t,$(TRIPLES),$(word 1,$(subst -, ,$(t)))))
+all: $(GENDIR)/target_tables_x86_64.h $(GENDIR)/target_tables_aarch64.h $(GENDIR)/target_tables_riscv64.h
 	@echo ""
-	@echo "Tables regenerated. Review and commit the updated generated/ files:"
+	@echo "Tables regenerated with LLVM $(LLVM_VER). Review and commit:"
 	@ls -1 $(GENDIR)/target_tables_*.h
 
+# Download LLVM release (only if not using LLVM_PREFIX override)
+$(LLVM_DL)/.downloaded: | $(BUILDDIR)
+	@echo "Downloading LLVM $(LLVM_VER)..."
+	curl -sL $(LLVM_RELEASE_URL) | tar xJ -C $(BUILDDIR)
+	mv $(BUILDDIR)/LLVM-$(LLVM_VER)-Linux-X64 $(LLVM_DL)
+	touch $@
+
+download: $(LLVM_DL)/.downloaded
+
 # Build the generator tool (links LLVM)
-$(GEN_TOOL): $(TOOLDIR)/gen_target_tables.cpp | $(BUILDDIR)
-	$(CXX) $(LLVM_CXXFLAGS) -o $@ $< $(LLVM_LDFLAGS) $(LLVM_SYSTEM_LIBS)
+$(GEN_TOOL): $(TOOLDIR)/gen_target_tables.cpp $(LLVM_DL)/.downloaded | $(BUILDDIR)
+	$(CXX) $(LLVM_CXXFLAGS) $(LLVM_EXTRA_FLAGS) -o $@ $< $(LLVM_LDFLAGS) $(LLVM_SYSTEM_LIBS)
 
 # Generate table headers
 $(GENDIR)/target_tables_x86_64.h: $(GEN_TOOL) | $(GENDIR)
@@ -50,3 +70,4 @@ $(BUILDDIR) $(GENDIR):
 
 clean:
 	rm -f $(GEN_TOOL)
+	rm -rf $(LLVM_DL)
