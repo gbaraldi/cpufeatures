@@ -25,9 +25,15 @@ BUILDDIR = build
 # Allow override via ARCH= for cross-compilation.
 ARCH ?= $(shell uname -m)
 
-# Normalize architecture names (macOS reports arm64 instead of aarch64)
+# Normalize architecture names
 ifeq ($(ARCH),arm64)
   override ARCH := aarch64
+endif
+ifeq ($(ARCH),i686)
+  override ARCH := x86_64
+endif
+ifeq ($(ARCH),i386)
+  override ARCH := x86_64
 endif
 
 ifeq ($(ARCH),x86_64)
