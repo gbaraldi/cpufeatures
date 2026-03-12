@@ -9,6 +9,7 @@
 #include "target_tables_riscv64.h"
 #endif
 #include "target_parsing.h"
+#include "cross_arch.h"
 
 #include <cstdio>
 
@@ -148,6 +149,42 @@ int main() {
             if (f == 0) printf("(none)");
             printf("\n");
         }
+    }
+
+    // Cross-arch queries
+    printf("\n--- Cross-arch queries ---\n");
+    {
+        const char *arches[] = {"x86_64", "aarch64", "riscv64"};
+        for (const char *arch : arches) {
+            printf("  %s: %u features, %u CPUs, %u words",
+                   arch, tp::cross_num_features(arch),
+                   tp::cross_num_cpus(arch),
+                   tp::cross_feature_words(arch));
+            unsigned llvm_ver = tp::cross_llvm_version_major(arch);
+            if (llvm_ver) printf(", LLVM %u", llvm_ver);
+            printf("\n");
+        }
+
+        // Look up CPUs from other architectures
+        tp::CrossFeatureBits fb;
+        if (tp::cross_lookup_cpu("x86_64", "haswell", fb)) {
+            printf("  x86_64/haswell: %u words, found\n", fb.num_words);
+        }
+        if (tp::cross_lookup_cpu("aarch64", "cortex-a78", fb)) {
+            printf("  aarch64/cortex-a78: %u words, found\n", fb.num_words);
+        }
+        if (tp::cross_lookup_cpu("riscv64", "sifive-u74", fb)) {
+            printf("  riscv64/sifive-u74: %u words, found\n", fb.num_words);
+        }
+        if (!tp::cross_lookup_cpu("x86_64", "nonexistent", fb)) {
+            printf("  x86_64/nonexistent: not found (correct)\n");
+        }
+
+        // Feature name lookups
+        int avx2_bit = tp::cross_feature_bit("x86_64", "avx2");
+        printf("  x86_64 avx2 bit: %d\n", avx2_bit);
+        int sve_bit = tp::cross_feature_bit("aarch64", "sve");
+        printf("  aarch64 sve bit: %d\n", sve_bit);
     }
 
     printf("\nDone.\n");

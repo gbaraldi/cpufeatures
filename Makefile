@@ -49,8 +49,18 @@ else
   $(error Unsupported architecture: $(ARCH). Supported: x86_64, aarch64, riscv64)
 endif
 
-# Source files
-LIB_SRCS = $(SRCDIR)/target_parsing.cpp $(HOST_SRC)
+# All generated table headers
+ALL_TABLES = $(GENDIR)/target_tables_x86_64.h \
+             $(GENDIR)/target_tables_aarch64.h \
+             $(GENDIR)/target_tables_riscv64.h
+
+# Source files: host-specific + target parsing + cross-arch tables (all arches)
+CROSS_SRCS = $(SRCDIR)/tables_x86_64.cpp \
+             $(SRCDIR)/tables_aarch64.cpp \
+             $(SRCDIR)/tables_riscv64.cpp \
+             $(SRCDIR)/cross_arch.cpp
+
+LIB_SRCS = $(SRCDIR)/target_parsing.cpp $(HOST_SRC) $(CROSS_SRCS)
 LIB_OBJS = $(patsubst $(SRCDIR)/%.cpp,$(BUILDDIR)/%.o,$(LIB_SRCS))
 
 STATIC_LIB = $(BUILDDIR)/libtarget_parsing.a
@@ -65,7 +75,24 @@ lib: $(STATIC_LIB)
 # Library (NO LLVM dependency)
 # ============================================================================
 
-$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HOST_TABLE) $(INCDIR)/target_parsing.h | $(BUILDDIR)
+# Host-specific files depend on the host table
+$(BUILDDIR)/target_parsing.o: $(SRCDIR)/target_parsing.cpp $(HOST_TABLE) $(INCDIR)/target_parsing.h | $(BUILDDIR)
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+
+$(BUILDDIR)/host_%.o: $(SRCDIR)/host_%.cpp $(HOST_TABLE) $(INCDIR)/target_parsing.h | $(BUILDDIR)
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+
+# Per-arch table files each depend on their own generated header
+$(BUILDDIR)/tables_x86_64.o: $(SRCDIR)/tables_x86_64.cpp $(GENDIR)/target_tables_x86_64.h $(INCDIR)/cross_arch.h | $(BUILDDIR)
+	$(CXX) $(CXXFLAGS) -Wno-unused-function -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+
+$(BUILDDIR)/tables_aarch64.o: $(SRCDIR)/tables_aarch64.cpp $(GENDIR)/target_tables_aarch64.h $(INCDIR)/cross_arch.h | $(BUILDDIR)
+	$(CXX) $(CXXFLAGS) -Wno-unused-function -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+
+$(BUILDDIR)/tables_riscv64.o: $(SRCDIR)/tables_riscv64.cpp $(GENDIR)/target_tables_riscv64.h $(INCDIR)/cross_arch.h | $(BUILDDIR)
+	$(CXX) $(CXXFLAGS) -Wno-unused-function -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+
+$(BUILDDIR)/cross_arch.o: $(SRCDIR)/cross_arch.cpp $(INCDIR)/cross_arch.h | $(BUILDDIR)
 	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
 
 $(STATIC_LIB): $(LIB_OBJS)
@@ -75,7 +102,7 @@ $(STATIC_LIB): $(LIB_OBJS)
 # Tests (NO LLVM dependency)
 # ============================================================================
 
-$(BUILDDIR)/test_standalone: test_standalone.cpp $(STATIC_LIB) $(HOST_TABLE)
+$(BUILDDIR)/test_standalone: test_standalone.cpp $(STATIC_LIB) $(HOST_TABLE) $(INCDIR)/cross_arch.h
 	$(CXX) $(CXXFLAGS) -Wno-unused-function -I$(INCDIR) -I$(GENDIR) -o $@ $< -L$(BUILDDIR) -ltarget_parsing
 
 test: $(BUILDDIR)/test_standalone

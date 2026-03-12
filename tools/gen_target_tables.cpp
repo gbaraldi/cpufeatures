@@ -5,6 +5,7 @@
 //
 // This tool links against LLVM at build time, but the output files do not.
 
+#include "llvm/Config/llvm-config.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -68,7 +69,10 @@ static void emitFooter(raw_ostream &OS, StringRef Arch) {
 static void emitBitsetType(raw_ostream &OS, unsigned NumWords) {
     OS << "// Feature bitset: " << NumWords << " x uint64_t = "
        << (NumWords * 64) << " bits\n";
-    OS << "#define TARGET_FEATURE_WORDS " << NumWords << "\n\n";
+    OS << "#define TARGET_FEATURE_WORDS " << NumWords << "\n";
+    OS << "#define TARGET_TABLES_LLVM_VERSION_MAJOR " << LLVM_VERSION_MAJOR << "\n";
+    OS << "#define TARGET_TABLES_LLVM_VERSION_MINOR " << LLVM_VERSION_MINOR << "\n";
+    OS << "#define TARGET_TABLES_LLVM_VERSION_PATCH " << LLVM_VERSION_PATCH << "\n\n";
     OS << "typedef struct {\n";
     OS << "    uint64_t bits[TARGET_FEATURE_WORDS];\n";
     OS << "} FeatureBits;\n\n";
