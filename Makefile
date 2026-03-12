@@ -60,7 +60,7 @@ lib: $(STATIC_LIB)
 # ============================================================================
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(HOST_TABLE) $(INCDIR)/target_parsing.h | $(BUILDDIR)
-	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -I$(SRCDIR) -c -o $@ $<
 
 $(STATIC_LIB): $(LIB_OBJS)
 	ar rcs $@ $^
@@ -70,7 +70,7 @@ $(STATIC_LIB): $(LIB_OBJS)
 # ============================================================================
 
 $(BUILDDIR)/test_standalone: test_standalone.cpp $(STATIC_LIB) $(HOST_TABLE)
-	$(CXX) $(CXXFLAGS) -I$(INCDIR) -I$(GENDIR) -o $@ $< -L$(BUILDDIR) -ltarget_parsing
+	$(CXX) $(CXXFLAGS) -Wno-unused-function -I$(INCDIR) -I$(GENDIR) -o $@ $< -L$(BUILDDIR) -ltarget_parsing
 
 test: $(BUILDDIR)/test_standalone
 	$(BUILDDIR)/test_standalone

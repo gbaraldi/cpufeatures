@@ -5,7 +5,8 @@
 #include "target_tables_x86_64.h"
 #include "target_parsing.h"
 
-#include <string.h>
+#include <string>
+#include <cstring>
 #include <cpuid.h>
 
 // ============================================================================
@@ -38,10 +39,8 @@ enum Vendor { VENDOR_INTEL, VENDOR_AMD, VENDOR_OTHER };
 
 static Vendor get_vendor() {
     auto r = cpuid(0);
-    // "GenuineIntel"
     if (r.ebx == 0x756e6547 && r.edx == 0x49656e69 && r.ecx == 0x6c65746e)
         return VENDOR_INTEL;
-    // "AuthenticAMD"
     if (r.ebx == 0x68747541 && r.edx == 0x69746e65 && r.ecx == 0x444d4163)
         return VENDOR_AMD;
     return VENDOR_OTHER;
@@ -71,19 +70,16 @@ static CPUModel get_cpu_model() {
 
 // ============================================================================
 // Host CPU name detection
-// Maps family/model to LLVM CPU name strings that match our tables.
-// This is essentially what LLVM's Host.cpp does.
 // ============================================================================
 
 static const char *detect_intel_cpu(const CPUModel &m) {
-    // Intel family 6
     if (m.family != 6) return "generic";
 
     switch (m.model) {
-    case 0x0f: // Core 2
+    case 0x0f:
     case 0x16: return "core2";
     case 0x17:
-    case 0x1d: return "core2"; // Penryn
+    case 0x1d: return "core2";
     case 0x1a:
     case 0x1e:
     case 0x1f:
@@ -108,7 +104,6 @@ static const char *detect_intel_cpu(const CPUModel &m) {
     case 0x8e:
     case 0x9e: return "skylake";
     case 0x55: {
-        // Skylake-X / Cascade Lake / Cooper Lake
         if (m.stepping >= 5) return "cascadelake";
         return "skylake-avx512";
     }
@@ -159,8 +154,8 @@ static const char *detect_amd_cpu(const CPUModel &m) {
 }
 
 const char *tp_get_host_cpu_name(void) {
-    static char cpu_name[128] = {};
-    if (cpu_name[0]) return cpu_name;
+    static std::string cpu_name;
+    if (!cpu_name.empty()) return cpu_name.c_str();
 
     Vendor v = get_vendor();
     CPUModel m = get_cpu_model();
@@ -173,165 +168,196 @@ const char *tp_get_host_cpu_name(void) {
     else
         name = "generic";
 
-    // Verify it's in our table; if not, fall back to generic
     if (!find_cpu(name))
         name = "generic";
 
-    strncpy(cpu_name, name, sizeof(cpu_name) - 1);
-    return cpu_name;
+    cpu_name = name;
+    return cpu_name.c_str();
 }
 
 // ============================================================================
-// Host feature detection via CPUID
-// Maps CPUID bits to LLVM feature names.
+// Table-driven host feature detection via CPUID
 // ============================================================================
 
+struct CPUIDBitMapping {
+    unsigned leaf;
+    unsigned subleaf;
+    enum Reg { EAX, EBX, ECX, EDX } reg;
+    unsigned bit;
+    const char *feature_name;
+};
+
+static constexpr CPUIDBitMapping cpuid_features[] = {
+    // Leaf 1, ECX
+    {1, 0, CPUIDBitMapping::ECX,  0, "sse3"},
+    {1, 0, CPUIDBitMapping::ECX,  1, "pclmul"},
+    {1, 0, CPUIDBitMapping::ECX,  9, "ssse3"},
+    {1, 0, CPUIDBitMapping::ECX, 12, "fma"},
+    {1, 0, CPUIDBitMapping::ECX, 13, "cx16"},
+    {1, 0, CPUIDBitMapping::ECX, 19, "sse4.1"},
+    {1, 0, CPUIDBitMapping::ECX, 20, "sse4.2"},
+    {1, 0, CPUIDBitMapping::ECX, 20, "crc32"},
+    {1, 0, CPUIDBitMapping::ECX, 22, "movbe"},
+    {1, 0, CPUIDBitMapping::ECX, 23, "popcnt"},
+    {1, 0, CPUIDBitMapping::ECX, 25, "aes"},
+    {1, 0, CPUIDBitMapping::ECX, 26, "xsave"},
+    {1, 0, CPUIDBitMapping::ECX, 28, "avx"},
+    {1, 0, CPUIDBitMapping::ECX, 29, "f16c"},
+    {1, 0, CPUIDBitMapping::ECX, 30, "rdrnd"},
+
+    // Leaf 7 sub 0, EBX
+    {7, 0, CPUIDBitMapping::EBX,  0, "fsgsbase"},
+    {7, 0, CPUIDBitMapping::EBX,  3, "bmi"},
+    {7, 0, CPUIDBitMapping::EBX,  5, "avx2"},
+    {7, 0, CPUIDBitMapping::EBX,  8, "bmi2"},
+    {7, 0, CPUIDBitMapping::EBX, 10, "invpcid"},
+    {7, 0, CPUIDBitMapping::EBX, 16, "avx512f"},
+    {7, 0, CPUIDBitMapping::EBX, 17, "avx512dq"},
+    {7, 0, CPUIDBitMapping::EBX, 18, "rdseed"},
+    {7, 0, CPUIDBitMapping::EBX, 19, "adx"},
+    {7, 0, CPUIDBitMapping::EBX, 21, "avx512ifma"},
+    {7, 0, CPUIDBitMapping::EBX, 23, "clflushopt"},
+    {7, 0, CPUIDBitMapping::EBX, 24, "clwb"},
+    {7, 0, CPUIDBitMapping::EBX, 28, "avx512cd"},
+    {7, 0, CPUIDBitMapping::EBX, 29, "sha"},
+    {7, 0, CPUIDBitMapping::EBX, 30, "avx512bw"},
+    {7, 0, CPUIDBitMapping::EBX, 31, "avx512vl"},
+
+    // Leaf 7 sub 0, ECX
+    {7, 0, CPUIDBitMapping::ECX,  1, "avx512vbmi"},
+    {7, 0, CPUIDBitMapping::ECX,  4, "pku"},
+    {7, 0, CPUIDBitMapping::ECX,  5, "waitpkg"},
+    {7, 0, CPUIDBitMapping::ECX,  6, "avx512vbmi2"},
+    {7, 0, CPUIDBitMapping::ECX,  7, "shstk"},
+    {7, 0, CPUIDBitMapping::ECX,  8, "gfni"},
+    {7, 0, CPUIDBitMapping::ECX,  9, "vaes"},
+    {7, 0, CPUIDBitMapping::ECX, 10, "vpclmulqdq"},
+    {7, 0, CPUIDBitMapping::ECX, 11, "avx512vnni"},
+    {7, 0, CPUIDBitMapping::ECX, 12, "avx512bitalg"},
+    {7, 0, CPUIDBitMapping::ECX, 14, "avx512vpopcntdq"},
+    {7, 0, CPUIDBitMapping::ECX, 22, "rdpid"},
+    {7, 0, CPUIDBitMapping::ECX, 25, "cldemote"},
+    {7, 0, CPUIDBitMapping::ECX, 27, "movdiri"},
+    {7, 0, CPUIDBitMapping::ECX, 28, "movdir64b"},
+    {7, 0, CPUIDBitMapping::ECX, 29, "enqcmd"},
+
+    // Leaf 7 sub 0, EDX
+    {7, 0, CPUIDBitMapping::EDX,  5, "uintr"},
+    {7, 0, CPUIDBitMapping::EDX,  8, "avx512vp2intersect"},
+    {7, 0, CPUIDBitMapping::EDX, 14, "serialize"},
+    {7, 0, CPUIDBitMapping::EDX, 16, "tsxldtrk"},
+    {7, 0, CPUIDBitMapping::EDX, 18, "pconfig"},
+    {7, 0, CPUIDBitMapping::EDX, 22, "amx-bf16"},
+    {7, 0, CPUIDBitMapping::EDX, 23, "avx512fp16"},
+    {7, 0, CPUIDBitMapping::EDX, 24, "amx-tile"},
+    {7, 0, CPUIDBitMapping::EDX, 25, "amx-int8"},
+
+    // Leaf 7 sub 1, EAX
+    {7, 1, CPUIDBitMapping::EAX,  0, "sha512"},
+    {7, 1, CPUIDBitMapping::EAX,  1, "sm3"},
+    {7, 1, CPUIDBitMapping::EAX,  2, "sm4"},
+    {7, 1, CPUIDBitMapping::EAX,  4, "avxvnni"},
+    {7, 1, CPUIDBitMapping::EAX,  5, "avx512bf16"},
+    {7, 1, CPUIDBitMapping::EAX,  7, "cmpccxadd"},
+    {7, 1, CPUIDBitMapping::EAX, 21, "amx-fp16"},
+    {7, 1, CPUIDBitMapping::EAX, 23, "avxifma"},
+
+    // Leaf 7 sub 1, EBX
+    {7, 1, CPUIDBitMapping::EBX,  4, "avxvnniint8"},
+    {7, 1, CPUIDBitMapping::EBX,  5, "avxneconvert"},
+    {7, 1, CPUIDBitMapping::EBX,  8, "amx-complex"},
+    {7, 1, CPUIDBitMapping::EBX, 10, "avxvnniint16"},
+    {7, 1, CPUIDBitMapping::EBX, 14, "prefetchi"},
+
+    // Extended 0x80000001, ECX
+    {0x80000001, 0, CPUIDBitMapping::ECX,  0, "sahf"},
+    {0x80000001, 0, CPUIDBitMapping::ECX,  5, "lzcnt"},
+    {0x80000001, 0, CPUIDBitMapping::ECX,  6, "sse4a"},
+    {0x80000001, 0, CPUIDBitMapping::ECX,  8, "prfchw"},
+    {0x80000001, 0, CPUIDBitMapping::ECX, 11, "xop"},
+    {0x80000001, 0, CPUIDBitMapping::ECX, 16, "fma4"},
+    {0x80000001, 0, CPUIDBitMapping::ECX, 21, "tbm"},
+    {0x80000001, 0, CPUIDBitMapping::ECX, 29, "mwaitx"},
+
+    // Leaf 0xD sub 1, EAX (XSAVE)
+    {0xd, 1, CPUIDBitMapping::EAX, 0, "xsaveopt"},
+    {0xd, 1, CPUIDBitMapping::EAX, 1, "xsavec"},
+    {0xd, 1, CPUIDBitMapping::EAX, 3, "xsaves"},
+
+    // Extended 0x80000008, EBX
+    {0x80000008, 0, CPUIDBitMapping::EBX, 0, "clzero"},
+    {0x80000008, 0, CPUIDBitMapping::EBX, 4, "rdpru"},
+    {0x80000008, 0, CPUIDBitMapping::EBX, 9, "wbnoinvd"},
+};
+
 void tp_get_host_features(FeatureBits *features) {
-    memset(features, 0, sizeof(FeatureBits));
+    std::memset(features, 0, sizeof(FeatureBits));
 
     unsigned max_leaf = cpuid_max_leaf();
     unsigned max_ext = cpuid_max_ext_leaf();
 
-    // Always have these on x86_64
-    const FeatureEntry *f;
-    if ((f = find_feature("64bit"))) feature_set(features, f->bit);
-    if ((f = find_feature("cx8"))) feature_set(features, f->bit);
-    if ((f = find_feature("cmov"))) feature_set(features, f->bit);
-    if ((f = find_feature("fxsr"))) feature_set(features, f->bit);
-    if ((f = find_feature("mmx"))) feature_set(features, f->bit);
-    if ((f = find_feature("sse"))) feature_set(features, f->bit);
-    if ((f = find_feature("sse2"))) feature_set(features, f->bit);
-    if ((f = find_feature("x87"))) feature_set(features, f->bit);
-
-    // CPUID leaf 1
-    if (max_leaf >= 1) {
-        auto r = cpuid(1);
-        // ECX bits
-        if (r.ecx & (1 << 0))  { if ((f = find_feature("sse3"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 1))  { if ((f = find_feature("pclmul"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 9))  { if ((f = find_feature("ssse3"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 12)) { if ((f = find_feature("fma"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 13)) { if ((f = find_feature("cx16"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 19)) { if ((f = find_feature("sse4.1"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 20)) { if ((f = find_feature("sse4.2"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 20)) { if ((f = find_feature("crc32"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 22)) { if ((f = find_feature("movbe"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 23)) { if ((f = find_feature("popcnt"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 25)) { if ((f = find_feature("aes"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 26)) { if ((f = find_feature("xsave"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 28)) { if ((f = find_feature("avx"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 29)) { if ((f = find_feature("f16c"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 30)) { if ((f = find_feature("rdrnd"))) feature_set(features, f->bit); }
+    // Always-present on x86_64
+    static const char *baseline_features[] = {
+        "64bit", "cx8", "cmov", "fxsr", "mmx", "sse", "sse2", "x87"
+    };
+    for (const char *name : baseline_features) {
+        const FeatureEntry *f = find_feature(name);
+        if (f) feature_set(features, f->bit);
     }
 
-    // CPUID leaf 7, subleaf 0
-    if (max_leaf >= 7) {
-        auto r = cpuid(7, 0);
-        // EBX bits
-        if (r.ebx & (1 << 0))  { if ((f = find_feature("fsgsbase"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 3))  { if ((f = find_feature("bmi"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 5))  { if ((f = find_feature("avx2"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 8))  { if ((f = find_feature("bmi2"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 10)) { if ((f = find_feature("invpcid"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 16)) { if ((f = find_feature("avx512f"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 17)) { if ((f = find_feature("avx512dq"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 18)) { if ((f = find_feature("rdseed"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 19)) { if ((f = find_feature("adx"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 21)) { if ((f = find_feature("avx512ifma"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 23)) { if ((f = find_feature("clflushopt"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 24)) { if ((f = find_feature("clwb"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 28)) { if ((f = find_feature("avx512cd"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 29)) { if ((f = find_feature("sha"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 30)) { if ((f = find_feature("avx512bw"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 31)) { if ((f = find_feature("avx512vl"))) feature_set(features, f->bit); }
+    // Walk the table, issuing CPUID only when needed
+    // Cache CPUID results to avoid redundant calls
+    struct {
+        unsigned leaf, subleaf;
+        CPUIDResult result;
+        bool valid;
+    } cache[8] = {};
+    unsigned cache_count = 0;
 
-        // ECX bits
-        if (r.ecx & (1 << 1))  { if ((f = find_feature("avx512vbmi"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 4))  { if ((f = find_feature("pku"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 5))  { if ((f = find_feature("waitpkg"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 6))  { if ((f = find_feature("avx512vbmi2"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 7))  { if ((f = find_feature("shstk"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 8))  { if ((f = find_feature("gfni"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 9))  { if ((f = find_feature("vaes"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 10)) { if ((f = find_feature("vpclmulqdq"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 11)) { if ((f = find_feature("avx512vnni"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 12)) { if ((f = find_feature("avx512bitalg"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 14)) { if ((f = find_feature("avx512vpopcntdq"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 22)) { if ((f = find_feature("rdpid"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 25)) { if ((f = find_feature("cldemote"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 27)) { if ((f = find_feature("movdiri"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 28)) { if ((f = find_feature("movdir64b"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 29)) { if ((f = find_feature("enqcmd"))) feature_set(features, f->bit); }
+    for (const auto &entry : cpuid_features) {
+        // Check if this leaf is available
+        bool is_ext = (entry.leaf >= 0x80000000);
+        unsigned max = is_ext ? max_ext : max_leaf;
+        if (entry.leaf > max) continue;
 
-        // EDX bits
-        if (r.edx & (1 << 5))  { if ((f = find_feature("uintr"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 8))  { if ((f = find_feature("avx512vp2intersect"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 14)) { if ((f = find_feature("serialize"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 16)) { if ((f = find_feature("tsxldtrk"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 18)) { if ((f = find_feature("pconfig"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 22)) { if ((f = find_feature("amx-bf16"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 23)) { if ((f = find_feature("avx512fp16"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 24)) { if ((f = find_feature("amx-tile"))) feature_set(features, f->bit); }
-        if (r.edx & (1 << 25)) { if ((f = find_feature("amx-int8"))) feature_set(features, f->bit); }
+        // Look up or cache the CPUID result
+        CPUIDResult r = {};
+        bool found = false;
+        for (unsigned c = 0; c < cache_count; c++) {
+            if (cache[c].leaf == entry.leaf && cache[c].subleaf == entry.subleaf) {
+                r = cache[c].result;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            r = cpuid(entry.leaf, entry.subleaf);
+            if (cache_count < 8) {
+                cache[cache_count] = {entry.leaf, entry.subleaf, r, true};
+                cache_count++;
+            }
+        }
+
+        unsigned reg_val = 0;
+        switch (entry.reg) {
+        case CPUIDBitMapping::EAX: reg_val = r.eax; break;
+        case CPUIDBitMapping::EBX: reg_val = r.ebx; break;
+        case CPUIDBitMapping::ECX: reg_val = r.ecx; break;
+        case CPUIDBitMapping::EDX: reg_val = r.edx; break;
+        }
+
+        if (reg_val & (1u << entry.bit)) {
+            const FeatureEntry *f = find_feature(entry.feature_name);
+            if (f) feature_set(features, f->bit);
+        }
     }
 
-    // CPUID leaf 7, subleaf 1
-    if (max_leaf >= 7) {
-        auto r = cpuid(7, 1);
-        // EAX bits
-        if (r.eax & (1 << 0))  { if ((f = find_feature("sha512"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 1))  { if ((f = find_feature("sm3"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 2))  { if ((f = find_feature("sm4"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 4))  { if ((f = find_feature("avxvnni"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 5))  { if ((f = find_feature("avx512bf16"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 7))  { if ((f = find_feature("cmpccxadd"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 21)) { if ((f = find_feature("amx-fp16"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 23)) { if ((f = find_feature("avxifma"))) feature_set(features, f->bit); }
-
-        // EBX bits
-        if (r.ebx & (1 << 4))  { if ((f = find_feature("avxvnniint8"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 5))  { if ((f = find_feature("avxneconvert"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 8))  { if ((f = find_feature("amx-complex"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 10)) { if ((f = find_feature("avxvnniint16"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 14)) { if ((f = find_feature("prefetchi"))) feature_set(features, f->bit); }
+    // AVX-512 implies evex512
+    const FeatureEntry *avx512f = find_feature("avx512f");
+    if (avx512f && feature_test(features, avx512f->bit)) {
+        const FeatureEntry *evex512 = find_feature("evex512");
+        if (evex512) feature_set(features, evex512->bit);
     }
 
-    // Extended CPUID 0x80000001
-    if (max_ext >= 0x80000001) {
-        auto r = cpuid(0x80000001);
-        // ECX bits
-        if (r.ecx & (1 << 0))  { if ((f = find_feature("sahf"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 5))  { if ((f = find_feature("lzcnt"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 6))  { if ((f = find_feature("sse4a"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 8))  { if ((f = find_feature("prfchw"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 11)) { if ((f = find_feature("xop"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 16)) { if ((f = find_feature("fma4"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 21)) { if ((f = find_feature("tbm"))) feature_set(features, f->bit); }
-        if (r.ecx & (1 << 29)) { if ((f = find_feature("mwaitx"))) feature_set(features, f->bit); }
-    }
-
-    // XSAVE-related (CPUID leaf 0xD)
-    if (max_leaf >= 0xd) {
-        auto r = cpuid(0xd, 1);
-        if (r.eax & (1 << 0)) { if ((f = find_feature("xsaveopt"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 1)) { if ((f = find_feature("xsavec"))) feature_set(features, f->bit); }
-        if (r.eax & (1 << 3)) { if ((f = find_feature("xsaves"))) feature_set(features, f->bit); }
-    }
-
-    // Extended CPUID 0x80000008
-    if (max_ext >= 0x80000008) {
-        auto r = cpuid(0x80000008);
-        if (r.ebx & (1 << 0))  { if ((f = find_feature("clzero"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 4))  { if ((f = find_feature("rdpru"))) feature_set(features, f->bit); }
-        if (r.ebx & (1 << 9))  { if ((f = find_feature("wbnoinvd"))) feature_set(features, f->bit); }
-    }
-
-    // AVX-512 implies evex512 (on CPUs that actually have 512-bit support)
-    // This is set by the OS via XCR0 check, but for simplicity we check CPUID
-    if ((f = find_feature("avx512f")) && feature_test(features, f->bit)) {
-        if ((f = find_feature("evex512"))) feature_set(features, f->bit);
-    }
-
-    // Expand all implied features
     expand_implied(features);
 }
