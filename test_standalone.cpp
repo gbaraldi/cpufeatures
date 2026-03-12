@@ -153,40 +153,99 @@ int main() {
 
     // Cross-arch queries
     printf("\n--- Cross-arch queries ---\n");
+    int failures = 0;
     {
+        auto check = [&](bool cond, const char *msg) {
+            if (!cond) { printf("  FAIL: %s\n", msg); failures++; }
+        };
+
+        // All arches have tables
         const char *arches[] = {"x86_64", "aarch64", "riscv64"};
         for (const char *arch : arches) {
-            printf("  %s: %u features, %u CPUs, %u words",
-                   arch, tp::cross_num_features(arch),
-                   tp::cross_num_cpus(arch),
-                   tp::cross_feature_words(arch));
-            unsigned llvm_ver = tp::cross_tables_version_major(arch);
-            if (llvm_ver) printf(", LLVM %u", llvm_ver);
-            printf("\n");
+            unsigned nf = tp::cross_num_features(arch);
+            unsigned nc = tp::cross_num_cpus(arch);
+            unsigned nw = tp::cross_feature_words(arch);
+            printf("  %s: %u features, %u CPUs, %u words\n", arch, nf, nc, nw);
+            check(nf > 50, "should have >50 features");
+            check(nc > 5, "should have >5 CPUs");
+            check(nw >= 4 && nw <= 5, "should have 4 or 5 words");
         }
 
-        // Look up CPUs from other architectures
+        // Unknown arch returns zeros
+        check(tp::cross_num_features("powerpc") == 0, "unknown arch returns 0 features");
+        check(tp::cross_feature_words("powerpc") == 0, "unknown arch returns 0 words");
+
+        // Arch name normalization
+        check(tp::cross_num_features("arm64") == tp::cross_num_features("aarch64"),
+              "arm64 should normalize to aarch64");
+        check(tp::cross_num_features("i686") == tp::cross_num_features("x86_64"),
+              "i686 should normalize to x86_64");
+
+        // Cross-arch CPU lookups
         tp::CrossFeatureBits fb;
-        if (tp::cross_lookup_cpu("x86_64", "haswell", fb)) {
-            printf("  x86_64/haswell: %u words, found\n", fb.num_words);
-        }
-        if (tp::cross_lookup_cpu("aarch64", "cortex-a78", fb)) {
-            printf("  aarch64/cortex-a78: %u words, found\n", fb.num_words);
-        }
-        if (tp::cross_lookup_cpu("riscv64", "sifive-u74", fb)) {
-            printf("  riscv64/sifive-u74: %u words, found\n", fb.num_words);
-        }
-        if (!tp::cross_lookup_cpu("x86_64", "nonexistent", fb)) {
-            printf("  x86_64/nonexistent: not found (correct)\n");
-        }
+        check(tp::cross_lookup_cpu("x86_64", "haswell", fb), "haswell should be found");
+        check(fb.num_words == 4, "x86_64 should have 4 words");
 
-        // Feature name lookups
+        // Count bits in haswell - should have many hw features
+        int haswell_bits = 0;
+        for (unsigned w = 0; w < fb.num_words; w++)
+            haswell_bits += __builtin_popcountll(fb.bits[w]);
+        printf("  x86_64/haswell: %d hw features\n", haswell_bits);
+        check(haswell_bits > 20, "haswell should have >20 hw features");
+
+        check(tp::cross_lookup_cpu("aarch64", "cortex-a78", fb), "cortex-a78 should be found");
+        check(fb.num_words == 5, "aarch64 should have 5 words");
+        int a78_bits = 0;
+        for (unsigned w = 0; w < fb.num_words; w++)
+            a78_bits += __builtin_popcountll(fb.bits[w]);
+        printf("  aarch64/cortex-a78: %d hw features\n", a78_bits);
+        check(a78_bits > 15, "cortex-a78 should have >15 hw features");
+
+        check(tp::cross_lookup_cpu("riscv64", "sifive-u74", fb), "sifive-u74 should be found");
+        check(!tp::cross_lookup_cpu("x86_64", "nonexistent", fb), "nonexistent should not be found");
+        check(!tp::cross_lookup_cpu("badarch", "haswell", fb), "bad arch should not be found");
+
+        // Feature name/bit lookups
         int avx2_bit = tp::cross_feature_bit("x86_64", "avx2");
-        printf("  x86_64 avx2 bit: %d\n", avx2_bit);
+        check(avx2_bit >= 0, "avx2 should have a valid bit");
         int sve_bit = tp::cross_feature_bit("aarch64", "sve");
-        printf("  aarch64 sve bit: %d\n", sve_bit);
+        check(sve_bit >= 0, "sve should have a valid bit");
+        check(tp::cross_feature_bit("x86_64", "nonexistent_feat") == -1,
+              "unknown feature should return -1");
+
+        // Feature bit_at and name iteration
+        const char *name0 = tp::cross_feature_name("x86_64", 0);
+        int bit0 = tp::cross_feature_bit_at("x86_64", 0);
+        check(name0 != nullptr, "feature 0 should have a name");
+        check(bit0 >= 0, "feature 0 should have a valid bit");
+        check(tp::cross_feature_name("x86_64", 99999) == nullptr,
+              "out of range index should return nullptr");
+        check(tp::cross_feature_bit_at("x86_64", 99999) == -1,
+              "out of range index should return -1");
+
+        // is_hw queries
+        check(tp::cross_feature_is_hw("x86_64", "avx2"), "avx2 should be hw");
+        check(!tp::cross_feature_is_hw("x86_64", "nonexistent_feat"),
+              "unknown feature should not be hw");
+
+        // CPU name iteration
+        const char *cpu0 = tp::cross_cpu_name("x86_64", 0);
+        check(cpu0 != nullptr, "cpu 0 should have a name");
+        check(tp::cross_cpu_name("x86_64", 99999) == nullptr,
+              "out of range cpu index should return nullptr");
+
+        // Version
+        unsigned ver = tp::cross_tables_version_major("x86_64");
+        printf("  tables version: %u\n", ver);
+        check(ver >= 18, "tables version should be >= 18");
+        check(tp::cross_tables_version_major("aarch64") == ver,
+              "all arches should have same version");
     }
 
-    printf("\nDone.\n");
+    if (failures > 0) {
+        printf("\nFAILED: %d test(s) failed.\n", failures);
+        return 1;
+    }
+    printf("\nDone. All tests passed.\n");
     return 0;
 }
