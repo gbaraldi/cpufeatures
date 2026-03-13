@@ -241,8 +241,8 @@ int main() {
         check(has_cross_feat("aarch64", "cortex-a78", "lse"),   "a78 should have lse");
         check(has_cross_feat("aarch64", "cortex-a78", "rdm"),   "a78 should have rdm");
 
-        // apple-m1 (a14) — Apple CPUs cherry-pick features rather than
-        // claiming full ARMv8.x compliance, so check individual features
+        // apple-m1 (a14) — M1 is arm 8.5 without BTI, so must report v8.4
+        check(has_cross_feat("aarch64", "apple-m1", "v8.4a"), "m1 should report v8.4a");
         check(has_cross_feat("aarch64", "apple-m1", "dotprod"), "m1 should have dotprod");
         check(has_cross_feat("aarch64", "apple-m1", "sha3"),   "m1 should have sha3");
         check(has_cross_feat("aarch64", "apple-m1", "fullfp16"), "m1 should have fullfp16");
