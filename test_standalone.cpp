@@ -205,6 +205,15 @@ int main() {
         check(!tp::cross_lookup_cpu("x86_64", "nonexistent", fb), "nonexistent should not be found");
         check(!tp::cross_lookup_cpu("badarch", "haswell", fb), "bad arch should not be found");
 
+        // Apple M-series aliases
+        tp::CrossFeatureBits m1_fb, a14_fb;
+        check(tp::cross_lookup_cpu("aarch64", "apple-m1", m1_fb), "apple-m1 alias should resolve");
+        check(tp::cross_lookup_cpu("aarch64", "apple-a14", a14_fb), "apple-a14 should be found");
+        bool m1_eq_a14 = (m1_fb.num_words == a14_fb.num_words);
+        for (unsigned w = 0; m1_eq_a14 && w < m1_fb.num_words; w++)
+            m1_eq_a14 = (m1_fb.bits[w] == a14_fb.bits[w]);
+        check(m1_eq_a14, "apple-m1 should equal apple-a14");
+
         // Feature name/bit lookups
         int avx2_bit = tp::cross_feature_bit("x86_64", "avx2");
         check(avx2_bit >= 0, "avx2 should have a valid bit");

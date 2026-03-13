@@ -5,10 +5,24 @@
 #include "cross_arch.h"
 #include <cstring>
 
+// CPU name aliases (from LLVM's ProcessorAlias definitions)
+static const char *resolve_alias(const char *name) {
+    struct Alias { const char *alias; const char *target; };
+    static const Alias aliases[] = {
+        {"apple-m1", "apple-a14"},
+        {"apple-m2", "apple-a15"},
+        {"apple-m3", "apple-a16"},
+        {nullptr, nullptr}
+    };
+    for (const Alias *a = aliases; a->alias; a++)
+        if (std::strcmp(name, a->alias) == 0) return a->target;
+    return name;
+}
+
 namespace tp::aarch64 {
 
 bool lookup_cpu(const char *name, CrossFeatureBits &out) {
-    const CPUEntry *c = find_cpu(name);
+    const CPUEntry *c = find_cpu(resolve_alias(name));
     if (!c) return false;
     std::memset(&out, 0, sizeof(out));
     out.num_words = TARGET_FEATURE_WORDS;

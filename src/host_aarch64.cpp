@@ -276,6 +276,73 @@ static std::string_view cpuinfo_field(std::string_view buf, std::string_view fie
     return {};
 }
 
+// Collect all distinct values of a cpuinfo field (one per core)
+static std::vector<std::string_view> cpuinfo_field_all(std::string_view buf, std::string_view field) {
+    std::vector<std::string_view> result;
+    size_t pos = 0;
+    while (pos < buf.size()) {
+        auto found = buf.find(field, pos);
+        if (found == std::string_view::npos) break;
+
+        if (found > 0 && buf[found - 1] != '\n') {
+            pos = found + 1;
+            continue;
+        }
+
+        auto after = found + field.size();
+        while (after < buf.size() && (buf[after] == ' ' || buf[after] == '\t'))
+            after++;
+        if (after >= buf.size() || buf[after] != ':') {
+            pos = found + 1;
+            continue;
+        }
+        after++;
+        while (after < buf.size() && (buf[after] == ' ' || buf[after] == '\t'))
+            after++;
+
+        auto eol = buf.find('\n', after);
+        if (eol == std::string_view::npos) eol = buf.size();
+        auto val = buf.substr(after, eol - after);
+
+        // Add if not already present
+        bool dup = false;
+        for (auto &v : result) if (v == val) { dup = true; break; }
+        if (!dup) result.push_back(val);
+
+        pos = eol + 1;
+    }
+    return result;
+}
+
+// Known big.LITTLE pairs: {big_part, little_part, result_name}
+struct BigLittlePair {
+    unsigned big_part;
+    unsigned little_part;
+    const char *name;
+};
+
+// Known big.LITTLE / DynamIQ pairings.
+// First entry (from LLVM Host.cpp), rest from ARM product documentation.
+// When both cores are present, report the big core.
+static const BigLittlePair big_little_pairs[] = {
+    // LLVM Host.cpp
+    {0xd85, 0xd87, "cortex-x925"},  // X925 + A725
+    // ARM DynamIQ pairings
+    {0xd82, 0xd80, "cortex-x4"},    // X4 + A520
+    {0xd81, 0xd80, "cortex-a720"},  // A720 + A520
+    {0xd4e, 0xd46, "cortex-x3"},    // X3 + A510
+    {0xd4d, 0xd46, "cortex-a715"},  // A715 + A510
+    {0xd48, 0xd46, "cortex-x2"},    // X2 + A510
+    {0xd47, 0xd46, "cortex-a710"},  // A710 + A510
+    {0xd44, 0xd41, "cortex-x1"},    // X1 + A78
+    {0xd41, 0xd05, "cortex-a78"},   // A78 + A55
+    {0xd0b, 0xd05, "cortex-a76"},   // A76 + A55
+    {0xd0a, 0xd05, "cortex-a75"},   // A75 + A55
+    {0xd08, 0xd03, "cortex-a72"},   // A72 + A53
+    {0xd07, 0xd03, "cortex-a57"},   // A57 + A53
+    {0, 0, nullptr}
+};
+
 struct FeatureMap {
     const char *linux_name;
     const char *llvm_name;
@@ -315,20 +382,61 @@ const std::string &get_host_cpu_name() {
     if (!cpu_name.empty()) return cpu_name;
 
     const auto &info = load_cpuinfo();
-    auto impl_sv = cpuinfo_field(info, "CPU implementer");
-    auto part_sv = cpuinfo_field(info, "CPU part");
+
+    // Collect all distinct (implementer, part) pairs from all cores.
+    // On big.LITTLE systems, different cores report different parts.
+    auto impl_all = cpuinfo_field_all(info, "CPU implementer");
+    auto part_all = cpuinfo_field_all(info, "CPU part");
+
+    struct CoreInfo { unsigned impl; unsigned part; };
+    std::vector<CoreInfo> cores;
+    // Pair up: typically each core block has one implementer + one part,
+    // but we collect all distinct parts we see.
+    unsigned default_impl = 0x41; // ARM Ltd.
+    if (!impl_all.empty())
+        default_impl = static_cast<unsigned>(std::strtoul(
+            std::string(impl_all[0]).c_str(), nullptr, 0));
+
+    for (auto &p : part_all) {
+        unsigned part = static_cast<unsigned>(std::strtoul(
+            std::string(p).c_str(), nullptr, 0));
+        cores.push_back({default_impl, part});
+    }
 
     const char *name = "generic";
-    if (!impl_sv.empty() && !part_sv.empty()) {
-        unsigned impl = static_cast<unsigned>(std::strtoul(
-            std::string(impl_sv).c_str(), nullptr, 0));
-        unsigned part = static_cast<unsigned>(std::strtoul(
-            std::string(part_sv).c_str(), nullptr, 0));
 
-        for (const ArmCPUInfo *c = arm_cpus; c->name; c++) {
-            if (c->implementer == impl && c->part == part) {
-                name = c->name;
+    // Check for known big.LITTLE pairs first
+    if (cores.size() >= 2) {
+        for (const auto &bl : big_little_pairs) {
+            if (!bl.name) break;
+            bool has_big = false, has_little = false;
+            for (const auto &c : cores) {
+                if (c.part == bl.big_part) has_big = true;
+                if (c.part == bl.little_part) has_little = true;
+            }
+            if (has_big && has_little) {
+                name = bl.name;
                 break;
+            }
+        }
+    }
+
+    // If no big.LITTLE match, look up all cores and pick the one with the
+    // most features (i.e. the "big" core on an unknown big.LITTLE system).
+    if (std::strcmp(name, "generic") == 0 && !cores.empty()) {
+        unsigned best_popcount = 0;
+        for (const auto &c : cores) {
+            for (const ArmCPUInfo *entry = arm_cpus; entry->name; entry++) {
+                if (entry->implementer == c.impl && entry->part == c.part) {
+                    const CPUEntry *cpu = find_cpu(entry->name);
+                    if (!cpu) continue;
+                    unsigned pc = feature_popcount(&cpu->features);
+                    if (pc > best_popcount) {
+                        best_popcount = pc;
+                        name = entry->name;
+                    }
+                    break;
+                }
             }
         }
     }
