@@ -451,36 +451,46 @@ const std::string &get_host_cpu_name() {
 FeatureBits get_host_features() {
     FeatureBits features{};
 
+    // Start with the features from the CPU table lookup.
+    // This gives us the full LLVM feature set for the detected CPU.
+    const auto &cpu = get_host_cpu_name();
+    const CPUEntry *entry = find_cpu(cpu.c_str());
+    if (entry)
+        features = entry->features;
+
+    // Layer on additional features detected from /proc/cpuinfo.
+    // This catches features the kernel reports that might not be in
+    // the CPU table (e.g. newer kernel, different silicon revision).
     const auto &info = load_cpuinfo();
     auto feat_line = cpuinfo_field(info, "Features");
-    if (feat_line.empty()) return features;
+    if (!feat_line.empty()) {
+        bool has_aes = false, has_pmull = false, has_sha1 = false, has_sha2 = false;
 
-    bool has_aes = false, has_pmull = false, has_sha1 = false, has_sha2 = false;
+        auto tokens = split(feat_line, ' ');
+        for (auto tok : tokens) {
+            if (tok == "aes") has_aes = true;
+            else if (tok == "pmull") has_pmull = true;
+            else if (tok == "sha1") has_sha1 = true;
+            else if (tok == "sha2") has_sha2 = true;
 
-    auto tokens = split(feat_line, ' ');
-    for (auto tok : tokens) {
-        if (tok == "aes") has_aes = true;
-        else if (tok == "pmull") has_pmull = true;
-        else if (tok == "sha1") has_sha1 = true;
-        else if (tok == "sha2") has_sha2 = true;
-
-        for (const FeatureMap *m = aarch64_feature_map; m->linux_name; m++) {
-            if (tok == m->linux_name) {
-                const FeatureEntry *fe = find_feature(m->llvm_name);
-                if (fe) feature_set(&features, fe->bit);
-                break;
+            for (const FeatureMap *m = aarch64_feature_map; m->linux_name; m++) {
+                if (tok == m->linux_name) {
+                    const FeatureEntry *fe = find_feature(m->llvm_name);
+                    if (fe) feature_set(&features, fe->bit);
+                    break;
+                }
             }
         }
-    }
 
-    if (has_aes && has_pmull) {
-        const FeatureEntry *fe = find_feature("aes");
-        if (fe) feature_set(&features, fe->bit);
-    }
+        if (has_aes && has_pmull) {
+            const FeatureEntry *fe = find_feature("aes");
+            if (fe) feature_set(&features, fe->bit);
+        }
 
-    if (has_sha1 && has_sha2) {
-        const FeatureEntry *fe = find_feature("sha2");
-        if (fe) feature_set(&features, fe->bit);
+        if (has_sha1 && has_sha2) {
+            const FeatureEntry *fe = find_feature("sha2");
+            if (fe) feature_set(&features, fe->bit);
+        }
     }
 
     expand_implied(&features);
