@@ -2,8 +2,13 @@
 // Always compiled regardless of host architecture.
 
 #include "target_tables_riscv64.h"
+#include "cpu_aliases.h"
 #include "cross_arch.h"
 #include <cstring>
+
+static const CPUEntry *find_cpu(const char *name) {
+    return _find_cpu_exact(resolve_cpu_alias(name));
+}
 
 namespace tp::riscv64 {
 

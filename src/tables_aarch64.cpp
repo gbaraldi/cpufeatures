@@ -2,29 +2,18 @@
 // Always compiled regardless of host architecture.
 
 #include "target_tables_aarch64.h"
+#include "cpu_aliases.h"
 #include "cross_arch.h"
 #include <cstring>
 
-// CPU name aliases (from LLVM's ProcessorAlias definitions)
-static const char *resolve_alias(const char *name) {
-    struct Alias { const char *alias; const char *target; };
-    static const Alias aliases[] = {
-        {"apple-m1", "apple-a14"},
-        {"apple-m2", "apple-a15"},
-        {"apple-m3", "apple-a16"},
-        {"apple-a18", "apple-m4"},
-        {"apple-a19", "apple-m5"},
-        {nullptr, nullptr}
-    };
-    for (const Alias *a = aliases; a->alias; a++)
-        if (std::strcmp(name, a->alias) == 0) return a->target;
-    return name;
+static const CPUEntry *find_cpu(const char *name) {
+    return _find_cpu_exact(resolve_cpu_alias(name));
 }
 
 namespace tp::aarch64 {
 
 bool lookup_cpu(const char *name, CrossFeatureBits &out) {
-    const CPUEntry *c = find_cpu(resolve_alias(name));
+    const CPUEntry *c = find_cpu(name);
     if (!c) return false;
     std::memset(&out, 0, sizeof(out));
     out.num_words = TARGET_FEATURE_WORDS;

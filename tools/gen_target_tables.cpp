@@ -291,7 +291,8 @@ static void emitLookupFunctions(raw_ostream &OS) {
     OS << "}\n\n";
 
     OS << "// Binary search for a CPU by name (table is sorted)\n";
-    OS << "static const CPUEntry *find_cpu(const char *name) {\n";
+    OS << "// Use find_cpu() instead — this is the raw lookup without alias resolution.\n";
+    OS << "static const CPUEntry *_find_cpu_exact(const char *name) {\n";
     OS << "    int lo = 0, hi = (int)num_cpus - 1;\n";
     OS << "    while (lo <= hi) {\n";
     OS << "        int mid = (lo + hi) / 2;\n";

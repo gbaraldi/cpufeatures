@@ -834,7 +834,8 @@ static const FeatureEntry *find_feature(const char *name) {
 }
 
 // Binary search for a CPU by name (table is sorted)
-static const CPUEntry *find_cpu(const char *name) {
+// Use find_cpu() instead — this is the raw lookup without alias resolution.
+static const CPUEntry *_find_cpu_exact(const char *name) {
     int lo = 0, hi = (int)num_cpus - 1;
     while (lo <= hi) {
         int mid = (lo + hi) / 2;

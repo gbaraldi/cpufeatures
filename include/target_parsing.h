@@ -19,6 +19,13 @@
 #error "Include the generated target table header before target_parsing.h"
 #endif
 
+// CPU name alias resolution + find_cpu wrapper.
+#include "cpu_aliases.h"
+
+inline const CPUEntry *find_cpu(const char *name) {
+    return _find_cpu_exact(resolve_cpu_alias(name));
+}
+
 namespace tp {
 
 // Flags for target cloning behavior
