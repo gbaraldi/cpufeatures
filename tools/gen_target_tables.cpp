@@ -194,13 +194,16 @@ static void emitFeatureTable(raw_ostream &OS,
     OS << "    FeatureBits implies;  // transitively implied features\n";
     OS << "} FeatureEntry;\n\n";
 
+    // Exclude features with uppercase names (e.g. CONTEXTIDREL2) — these are
+    // system register features, not valid -mattr arguments for LLVM.
+    for (const auto &F : Features) {
+        if (F.Key[0] && std::isupper(static_cast<unsigned char>(F.Key[0])))
+            HWMask.reset(F.Value);
+    }
+
     OS << "static const FeatureEntry feature_table[] = {\n";
     for (const auto &F : Features) {
         bool IsHW = HWMask.test(F.Value);
-        // Features with uppercase names (e.g. CONTEXTIDREL2) are system
-        // register features, not valid -mattr arguments for LLVM.
-        if (IsHW && F.Key[0] && std::isupper(static_cast<unsigned char>(F.Key[0])))
-            IsHW = false;
         OS << "    { \"" << F.Key << "\", \"";
         StringRef Desc(F.Desc);
         for (char C : Desc) {
