@@ -69,7 +69,10 @@ const std::string &get_host_cpu_name() {
         name = "apple-m4"; break;
     }
 
-    if (!find_cpu(name))
+    // Use the resolved alias name (the one actually in the table) so that
+    // LLVM recognizes it when used as a -mcpu value.
+    name = resolve_cpu_alias(name);
+    if (!_find_cpu_exact(name))
         name = "generic";
 
     cpu_name = name;
@@ -80,7 +83,7 @@ FeatureBits get_host_features() {
     FeatureBits features{};
 
     const auto &cpu = get_host_cpu_name();
-    const CPUEntry *entry = find_cpu(cpu.c_str());
+    const CPUEntry *entry = _find_cpu_exact(cpu.c_str());
     if (entry)
         features = entry->features;
 
