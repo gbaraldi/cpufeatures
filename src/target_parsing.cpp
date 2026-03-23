@@ -358,4 +358,119 @@ std::vector<LLVMTargetSpec> resolve_targets_for_llvm(
     return result;
 }
 
+// ============================================================================
+// Sysimage serialization
+// ============================================================================
+
+std::vector<uint8_t> serialize_targets(const std::vector<LLVMTargetSpec> &targets) {
+    std::vector<uint8_t> buf;
+
+    auto emit = [&](const void *data, size_t sz) {
+        auto p = static_cast<const uint8_t*>(data);
+        buf.insert(buf.end(), p, p + sz);
+    };
+    auto emit_u32 = [&](uint32_t v) { emit(&v, 4); };
+    auto emit_str = [&](const std::string &s) {
+        emit_u32(static_cast<uint32_t>(s.size()));
+        emit(s.data(), s.size());
+    };
+
+    emit_u32(static_cast<uint32_t>(targets.size()));
+    for (const auto &t : targets) {
+        emit_u32(t.flags);
+        emit_u32(static_cast<uint32_t>(t.base));
+        emit_u32(TARGET_FEATURE_WORDS);
+        emit(t.en_features.bits, sizeof(t.en_features.bits));
+        emit(t.dis_features.bits, sizeof(t.dis_features.bits));
+        emit_str(t.cpu_name);
+        emit_str(t.ext_features);
+    }
+
+    return buf;
+}
+
+std::vector<LLVMTargetSpec> deserialize_targets(const uint8_t *data) {
+    auto load = [&](void *dest, size_t sz) {
+        std::memcpy(dest, data, sz);
+        data += sz;
+    };
+    auto load_u32 = [&]() -> uint32_t {
+        uint32_t v;
+        load(&v, 4);
+        return v;
+    };
+    auto load_str = [&]() -> std::string {
+        uint32_t len = load_u32();
+        std::string s(reinterpret_cast<const char*>(data), len);
+        data += len;
+        return s;
+    };
+
+    uint32_t ntargets = load_u32();
+    std::vector<LLVMTargetSpec> result(ntargets);
+
+    for (uint32_t i = 0; i < ntargets; i++) {
+        auto &t = result[i];
+        t.flags = load_u32();
+        t.base = static_cast<int>(load_u32());
+        uint32_t nwords = load_u32();
+        // Read feature bits, handle size mismatch gracefully
+        std::memset(&t.en_features, 0, sizeof(t.en_features));
+        std::memset(&t.dis_features, 0, sizeof(t.dis_features));
+        unsigned words_to_read = nwords < TARGET_FEATURE_WORDS ? nwords : TARGET_FEATURE_WORDS;
+        load(t.en_features.bits, words_to_read * sizeof(uint64_t));
+        if (nwords > TARGET_FEATURE_WORDS)
+            data += (nwords - TARGET_FEATURE_WORDS) * sizeof(uint64_t);
+        load(t.dis_features.bits, words_to_read * sizeof(uint64_t));
+        if (nwords > TARGET_FEATURE_WORDS)
+            data += (nwords - TARGET_FEATURE_WORDS) * sizeof(uint64_t);
+        t.cpu_name = load_str();
+        t.ext_features = load_str();
+    }
+
+    return result;
+}
+
+// ============================================================================
+// Sysimage target matching
+// ============================================================================
+
+TargetMatch match_targets(const std::vector<LLVMTargetSpec> &targets,
+                          const LLVMTargetSpec &host) {
+    TargetMatch match;
+    bool match_name = false;
+    int best_feat_count = 0;
+
+    for (int i = 0; i < static_cast<int>(targets.size()); i++) {
+        // Check: target must not enable features the host has disabled
+        FeatureBits conflict;
+        feature_and_out(&conflict, &targets[i].en_features, &host.dis_features);
+        if (feature_any(&conflict))
+            continue;
+
+        bool name_match = (targets[i].cpu_name == host.cpu_name);
+        int vreg = max_vector_size(targets[i].en_features);
+        int feat_count = feature_popcount(&targets[i].en_features);
+
+        if (name_match && !match_name) {
+            // First name match resets the search
+            match_name = true;
+            match.vreg_size = 0;
+            best_feat_count = 0;
+        }
+        if (match_name && !name_match)
+            continue;
+
+        if (vreg > match.vreg_size ||
+            (vreg == match.vreg_size && feat_count > best_feat_count) ||
+            (vreg == match.vreg_size && feat_count == best_feat_count && i > match.best_idx)) {
+            match.best_idx = i;
+            match.vreg_size = vreg;
+            best_feat_count = feat_count;
+        }
+    }
+
+    return match;
+}
+
 } // namespace tp

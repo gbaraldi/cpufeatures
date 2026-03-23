@@ -162,6 +162,27 @@ int max_vector_size(const FeatureBits &features);
 const FeatureBits &get_hw_feature_mask();
 
 // ============================================================================
+// Sysimage serialization and matching
+// ============================================================================
+
+// Serialize targets to binary format for embedding in sysimages
+std::vector<uint8_t> serialize_targets(const std::vector<LLVMTargetSpec> &targets);
+
+// Deserialize targets from binary data
+std::vector<LLVMTargetSpec> deserialize_targets(const uint8_t *data);
+
+// Result of target matching
+struct TargetMatch {
+    int best_idx = -1;
+    int vreg_size = 0;
+};
+
+// Match a host target against a set of compiled targets. Returns the best
+// compatible target index and its vector register size.
+TargetMatch match_targets(const std::vector<LLVMTargetSpec> &targets,
+                          const LLVMTargetSpec &host);
+
+// ============================================================================
 // Host detection
 // ============================================================================
 

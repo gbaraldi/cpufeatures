@@ -603,7 +603,84 @@ int main() {
         test_x86_psabi("znver3", "x86-64-v3");       // AMD Zen 3: same
         test_x86_psabi("znver4", "x86-64-v4");       // AMD Zen 4: avx512
         test_x86_psabi("broadwell", "x86-64-v3");
-    }
+
+        // ============================================================
+        // Serialization round-trip
+        // ============================================================
+        printf("\n  --- Serialization round-trip ---\n");
+        if (hsw_cpu) {
+            tp::ResolveOptions opts;
+            opts.host_features = &hsw_cpu->features;
+            opts.host_cpu = "haswell";
+
+            auto specs = tp::resolve_targets_for_llvm(
+                "generic;x86-64-v2,clone_all;x86-64-v3,-rdrnd,base(1);x86-64-v4,-rdrnd,base(1)",
+                opts);
+
+            // Serialize
+            auto blob = tp::serialize_targets(specs);
+            check(blob.size() > 0, "serialized data should be non-empty");
+
+            // Deserialize
+            auto restored = tp::deserialize_targets(blob.data());
+            check(restored.size() == specs.size(), "round-trip: same count");
+            for (size_t i = 0; i < specs.size() && i < restored.size(); i++) {
+                check(restored[i].cpu_name == specs[i].cpu_name,
+                      ("round-trip name mismatch at " + std::to_string(i)).c_str());
+                check(restored[i].flags == specs[i].flags,
+                      ("round-trip flags mismatch at " + std::to_string(i)).c_str());
+                check(restored[i].base == specs[i].base,
+                      ("round-trip base mismatch at " + std::to_string(i)).c_str());
+                check(feature_equal(&restored[i].en_features, &specs[i].en_features),
+                      ("round-trip en_features mismatch at " + std::to_string(i)).c_str());
+                check(feature_equal(&restored[i].dis_features, &specs[i].dis_features),
+                      ("round-trip dis_features mismatch at " + std::to_string(i)).c_str());
+            }
+            printf("  serialization round-trip: OK (%zu bytes, %zu targets)\n",
+                   blob.size(), specs.size());
+        }
+
+        // ============================================================
+        // Target matching via library API
+        // ============================================================
+        printf("\n  --- Target matching ---\n");
+        {
+            auto test_match = [&](const char *host_name, const char *target_str,
+                                  const char *expected_best) {
+                const CPUEntry *host = find_cpu(host_name);
+                if (!host) { printf("  %s: NOT IN TABLE (skip)\n", host_name); return; }
+
+                tp::ResolveOptions build_opts;
+                build_opts.mask_first_to_host = false; // building, not loading
+
+                auto sysimg_specs = tp::resolve_targets_for_llvm(target_str, build_opts);
+
+                // Build host target
+                tp::ResolveOptions host_opts;
+                host_opts.host_features = &host->features;
+                host_opts.host_cpu = host_name;
+                auto host_specs = tp::resolve_targets_for_llvm("native", host_opts);
+                check(!host_specs.empty(), "host should produce at least 1 spec");
+
+                auto match = tp::match_targets(sysimg_specs, host_specs[0]);
+
+                const char *matched = match.best_idx >= 0
+                    ? sysimg_specs[match.best_idx].cpu_name.c_str() : "NONE";
+                printf("  %s → [%d] %s (expected: %s) %s\n",
+                       host_name, match.best_idx, matched, expected_best,
+                       std::string(matched) == expected_best ? "OK" : "MISMATCH");
+                check(std::string(matched) == expected_best,
+                      (std::string(host_name) + " match should be " + expected_best).c_str());
+            };
+
+            // psABI targets
+            test_match("core2", "generic;x86-64-v2,clone_all;x86-64-v3,base(1);x86-64-v4,base(1)", "x86-64");
+            test_match("haswell", "generic;x86-64-v2,clone_all;x86-64-v3,base(1);x86-64-v4,base(1)", "x86-64-v3");
+            test_match("znver1", "generic;x86-64-v2,clone_all;x86-64-v3,base(1);x86-64-v4,base(1)", "x86-64-v3");
+            test_match("znver4", "generic;x86-64-v2,clone_all;x86-64-v3,base(1);x86-64-v4,base(1)", "x86-64-v4");
+            test_match("skylake-avx512", "generic;x86-64-v2,clone_all;x86-64-v3,base(1);x86-64-v4,base(1)", "x86-64-v4");
+        }
+    } // end cross-arch tests
 
     if (failures > 0) {
         printf("\nFAILED: %d test(s) failed.\n", failures);
