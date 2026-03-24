@@ -294,10 +294,17 @@ static constexpr CPUIDBitMapping cpuid_features[] = {
 FeatureBits get_host_features() {
     FeatureBits features{};
 
+    // Start with the detected CPU's features from the table.
+    // This gives us non-CPUID features like nopl, ermsb, etc.
+    const auto &cpu = get_host_cpu_name();
+    const CPUEntry *entry = _find_cpu_exact(cpu.c_str());
+    if (entry)
+        features = entry->features;
+
     unsigned max_leaf = cpuid_max_leaf();
     unsigned max_ext = cpuid_max_ext_leaf();
 
-    // Always-present baseline features
+    // Baseline features always present
     static const char *baseline_features[] = {
 #if defined(__x86_64__) || defined(_M_X64)
         "64bit",
