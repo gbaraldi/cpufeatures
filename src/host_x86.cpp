@@ -297,9 +297,12 @@ FeatureBits get_host_features() {
     unsigned max_leaf = cpuid_max_leaf();
     unsigned max_ext = cpuid_max_ext_leaf();
 
-    // Always-present on x86_64
+    // Always-present baseline features
     static const char *baseline_features[] = {
-        "64bit", "cx8", "cmov", "fxsr", "mmx", "sse", "sse2", "x87"
+#if defined(__x86_64__) || defined(_M_X64)
+        "64bit",
+#endif
+        "cx8", "cmov", "fxsr", "mmx", "sse", "sse2", "x87"
     };
     for (const char *name : baseline_features) {
         const FeatureEntry *f = find_feature(name);
