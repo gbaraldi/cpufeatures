@@ -461,13 +461,16 @@ int main() {
             printf("  x86_64 CI targets: OK (%zu specs)\n", x86_specs.size());
         }
 
-        // i686: pentium4
+        // i686: pentium4 (only testable on x86 host)
         {
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
             auto i686_specs = tp::resolve_targets_for_llvm("pentium4");
             check(i686_specs.size() == 1, "i686 CI: should produce 1 spec");
-            // pentium4 should be found as a CPU
             check(!(i686_specs[0].flags & tp::TF_UNKNOWN_NAME), "i686 CI: pentium4 should be known");
             printf("  i686 CI targets: OK\n");
+#else
+            printf("  i686 CI targets: SKIPPED (not x86 host)\n");
+#endif
         }
 
         // aarch64 macOS: generic;apple-m1,clone_all
