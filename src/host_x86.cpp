@@ -158,6 +158,10 @@ const std::string &get_host_cpu_name() {
     static std::string cpu_name;
     if (!cpu_name.empty()) return cpu_name;
 
+#if defined(__i386__) || defined(_M_IX86)
+    // On 32-bit, always report pentium4 (the generic i686 target)
+    cpu_name = "pentium4";
+#else
     Vendor v = get_vendor();
     CPUModel m = get_cpu_model();
 
@@ -173,6 +177,7 @@ const std::string &get_host_cpu_name() {
         name = "generic";
 
     cpu_name = name;
+#endif
     return cpu_name;
 }
 
@@ -294,16 +299,6 @@ static constexpr CPUIDBitMapping cpuid_features[] = {
 FeatureBits get_host_features() {
     FeatureBits features{};
 
-    // Start with the detected CPU's features from the table.
-    // This gives us non-CPUID features like nopl, ermsb, etc.
-    const auto &cpu = get_host_cpu_name();
-    const CPUEntry *entry = _find_cpu_exact(cpu.c_str());
-    if (entry)
-        features = entry->features;
-
-    unsigned max_leaf = cpuid_max_leaf();
-    unsigned max_ext = cpuid_max_ext_leaf();
-
     // Baseline features always present
     static const char *baseline_features[] = {
 #if defined(__x86_64__) || defined(_M_X64)
@@ -315,6 +310,28 @@ FeatureBits get_host_features() {
         const FeatureEntry *f = find_feature(name);
         if (f) feature_set(&features, f->bit);
     }
+
+#if defined(__i386__) || defined(_M_IX86)
+    // On 32-bit, just return baseline features.
+    // Full detection is not worth the complexity on this legacy platform.
+    return features;
+#endif
+
+    // Start with the detected CPU's features from the table.
+    // This gives us non-CPUID features like nopl, ermsb, etc.
+    const auto &cpu = get_host_cpu_name();
+    const CPUEntry *entry = _find_cpu_exact(cpu.c_str());
+    if (entry)
+        features = entry->features;
+
+    // Re-apply baseline (table may not include all of them)
+    for (const char *name : baseline_features) {
+        const FeatureEntry *f = find_feature(name);
+        if (f) feature_set(&features, f->bit);
+    }
+
+    unsigned max_leaf = cpuid_max_leaf();
+    unsigned max_ext = cpuid_max_ext_leaf();
 
     // Walk the table, cache CPUID results to avoid redundant calls
     struct {
