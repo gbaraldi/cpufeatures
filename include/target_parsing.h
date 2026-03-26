@@ -122,6 +122,9 @@ inline bool has_feature(const FeatureBits &bits, const char *name) {
     return fe && feature_test(&bits, fe->bit);
 }
 
+// Print available CPU targets and host info to stdout
+void print_cpu_targets();
+
 // ============================================================================
 // Low-level API (building blocks)
 // ============================================================================

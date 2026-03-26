@@ -478,4 +478,11 @@ TargetMatch match_targets(const std::vector<LLVMTargetSpec> &targets,
     return match;
 }
 
+void print_cpu_targets() {
+    std::printf("Available CPU targets:\n");
+    for (unsigned i = 0; i < num_cpus; i++)
+        std::printf("  %s\n", cpu_table[i].name);
+    std::printf("\nHost CPU: %s\n", get_host_cpu_name().c_str());
+}
+
 } // namespace tp
