@@ -354,7 +354,7 @@ static const FeatureEntry feature_table[] = {
     { "cx8", "Support CMPXCHG8B instructions", 39, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "egpr", "Support extended general purpose register", 42, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "enqcmd", "Has ENQCMD instructions", 43, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "ermsb", "REP MOVS/STOS are fast", 44, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "ermsb", "REP MOVS/STOS are fast", 44, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "evex512", "Support ZMM and 64-bit mask instructions", 45, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "f16c", "Support 16-bit floating point conversion instructions", 46, 1, { { 0x1000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "false-deps-getmant", "VGETMANTSS/SD/SH and VGETMANDPS/PD(memory version) has a false dependency on dest register", 160, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -385,7 +385,7 @@ static const FeatureEntry feature_table[] = {
     { "fma", "Enable three-operand fused multiple-add", 47, 1, { { 0x1000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "fma4", "Enable four-operand fused multiple-add", 48, 1, { { 0x1000ULL, 0x8000000000ULL, 0x0ULL, 0x0ULL } } },
     { "fsgsbase", "Support FS/GS Base instructions", 50, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "fsrm", "REP MOVSB of short lengths is faster", 51, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "fsrm", "REP MOVSB of short lengths is faster", 51, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "fxsr", "Support fxsave/fxrestore instructions", 52, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "gfni", "Enable Galois Field Arithmetic Instructions", 53, 1, { { 0x0ULL, 0x2000000000ULL, 0x0ULL, 0x0ULL } } },
     { "harden-sls-ijmp", "Harden against straight line speculation across indirect JMP instructions.", 55, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -496,7 +496,7 @@ static const FeatureEntry feature_table[] = {
 static const unsigned num_features = 196;
 
 // Precomputed mask of hardware (CPUID-detectable) features
-static const FeatureBits hw_feature_mask = { { 0x9e7fffffffffbfffULL, 0xfff6cbffa0f7ffffULL, 0x7fULL, 0x0ULL } };
+static const FeatureBits hw_feature_mask = { { 0x9e77efffffffbfffULL, 0xfff6cbffa0f7ffffULL, 0x7fULL, 0x0ULL } };
 
 // CPU table: name, base features (from Implies), full resolved features
 typedef struct {

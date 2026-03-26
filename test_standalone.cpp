@@ -557,7 +557,7 @@ int main() {
         test_x86_host("skylake", "haswell");          // skylake > haswell but < v4
         test_x86_host("skylake-avx512", "x86-64-v4"); // has avx512
         test_x86_host("znver1", "sandybridge");      // haswell has invpcid, zen1 doesn't
-        test_x86_host("znver3", "sandybridge");      // same issue — use psABI levels instead
+        test_x86_host("znver3", "haswell");           // zen3 has all haswell ISA features
         test_x86_host("znver4", "x86-64-v4");        // AMD Zen 4 has avx512
         test_x86_host("broadwell", "haswell");        // broadwell ⊃ haswell
 

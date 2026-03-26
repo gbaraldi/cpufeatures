@@ -200,10 +200,19 @@ static void emitFeatureTable(raw_ostream &OS,
     OS << "    FeatureBits implies;  // transitively implied features\n";
     OS << "} FeatureEntry;\n\n";
 
-    // Exclude features with uppercase names (e.g. CONTEXTIDREL2) — these are
-    // system register features, not valid -mattr arguments for LLVM.
+    // Exclude features that shouldn't be in the hardware mask:
+    // - Uppercase names (e.g. CONTEXTIDREL2): system register features
+    // - Features whose description indicates tuning hints rather than ISA
+    //   (e.g. ermsb "REP MOVS/STOS are fast", fsrm "REP MOVSB of short
+    //   lengths is faster"). These are not CPUID-detectable on all vendors
+    //   and shouldn't cause matching conflicts.
     for (const auto &F : Features) {
         if (F.Key[0] && std::isupper(static_cast<unsigned char>(F.Key[0])))
+            HWMask.reset(F.Value);
+        StringRef Desc(F.Desc);
+        if (Desc.contains("fast") || Desc.contains("Fast") ||
+            Desc.contains("slow") || Desc.contains("Slow") ||
+            Desc.contains("prefer") || Desc.contains("Prefer"))
             HWMask.reset(F.Value);
     }
 
