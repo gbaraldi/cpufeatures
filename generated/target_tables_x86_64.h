@@ -394,7 +394,7 @@ static const FeatureEntry feature_table[] = {
     { "idivl-to-divb", "Use 8-bit divide for positive values less than 256", 185, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "idivq-to-divl", "Use 32-bit divide for positive values less than 2^32", 186, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "inline-asm-use-gpr32", "Enable use of GPR32 in inline assembly for APX", 115, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "invpcid", "Invalidate Process-Context Identifier", 58, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "invpcid", "Invalidate Process-Context Identifier", 58, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "kl", "Support Key Locker kl Instructions", 59, 1, { { 0x0ULL, 0x2000000000ULL, 0x0ULL, 0x0ULL } } },
     { "lea-sp", "Use LEA for adjusting the stack pointer (this is an optimization for Intel Atom processors)", 162, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "lea-uses-ag", "LEA instruction needs inputs at AG stage", 163, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -415,7 +415,7 @@ static const FeatureEntry feature_table[] = {
     { "no-bypass-delay-blend", "Has no bypass delay when using the 'wrong' blend type", 169, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "no-bypass-delay-mov", "Has no bypass delay when using the 'wrong' mov type", 170, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "no-bypass-delay-shuffle", "Has no bypass delay when using the 'wrong' shuffle type", 171, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "nopl", "Enable NOPL instruction (generally pentium pro+)", 73, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "nopl", "Enable NOPL instruction (generally pentium pro+)", 73, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pad-short-functions", "Pad short functions (to prevent a stall when returning too early)", 174, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pclmul", "Enable packed carry-less multiplication instructions", 74, 1, { { 0x0ULL, 0x2000000000ULL, 0x0ULL, 0x0ULL } } },
     { "pconfig", "platform configuration instruction", 75, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -496,9 +496,7 @@ static const FeatureEntry feature_table[] = {
 static const unsigned num_features = 196;
 
 // Precomputed mask of hardware (CPUID-detectable) features
-// Manually excluded: ermsb (44), fsrm (51) — tuning hints;
-//                    invpcid (58) — privileged instruction, not user-space codegen
-static const FeatureBits hw_feature_mask = { { 0x9a77efffffffbfffULL, 0xfff6cbffa0f7ffffULL, 0x7fULL, 0x0ULL } };
+static const FeatureBits hw_feature_mask = { { 0x9a77efffffffbfffULL, 0xfff6cbffa0f7fdffULL, 0x7fULL, 0x0ULL } };
 
 // CPU table: name, base features (from Implies), full resolved features
 typedef struct {
