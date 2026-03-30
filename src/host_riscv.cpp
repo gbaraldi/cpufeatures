@@ -9,7 +9,6 @@
 #include <cstdlib>
 
 #ifdef __linux__
-#include <fstream>
 #include <unistd.h>
 #include <sys/syscall.h>
 
@@ -127,29 +126,6 @@ static const char *detect_riscv_cpu_from_hwprobe(void) {
     return nullptr;
 }
 
-static const char *detect_riscv_cpu_from_cpuinfo(void) {
-    std::ifstream f("/proc/cpuinfo");
-    if (!f) return nullptr;
-
-    std::string line;
-    while (std::getline(f, line)) {
-        if (line.compare(0, 5, "uarch") != 0) continue;
-
-        auto colon = line.find(':');
-        if (colon == std::string::npos) continue;
-
-        auto val = line.substr(colon + 1);
-        auto start = val.find_first_not_of(" \t");
-        if (start == std::string::npos) continue;
-        val = val.substr(start);
-
-        if (val.find("sifive,u74") != std::string::npos)
-            return "sifive-u74";
-        if (val.find("sifive,bullet") != std::string::npos)
-            return "sifive-u74";
-    }
-    return nullptr;
-}
 #endif
 
 static void set_feature(FeatureBits *features, const char *name) {
@@ -167,8 +143,6 @@ const std::string &get_host_cpu_name() {
 
 #ifdef __linux__
     name = detect_riscv_cpu_from_hwprobe();
-    if (!name)
-        name = detect_riscv_cpu_from_cpuinfo();
 #endif
 
     if (!name || !find_cpu(name))
