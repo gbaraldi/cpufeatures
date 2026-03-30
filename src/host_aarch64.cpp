@@ -14,6 +14,7 @@
 #include <windows.h>
 #else
 #include <fstream>
+#include <sys/auxv.h>
 #endif
 
 // ============================================================================
@@ -366,38 +367,6 @@ static const BigLittlePair big_little_pairs[] = {
     {0, 0, nullptr}
 };
 
-struct FeatureMap {
-    const char *linux_name;
-    const char *llvm_name;
-};
-
-static const FeatureMap aarch64_feature_map[] = {
-    {"asimd", "neon"},
-    {"fp", "fp-armv8"},
-    {"crc32", "crc"},
-    {"atomics", "lse"},
-    {"rng", "rand"},
-    {"sha3", "sha3"},
-    {"sm4", "sm4"},
-    {"sve", "sve"},
-    {"sve2", "sve2"},
-    {"sveaes", "sve-aes"},
-    {"svesha3", "sve-sha3"},
-    {"svesm4", "sve-sm4"},
-    {"dotprod", "dotprod"},
-    {"bf16", "bf16"},
-    {"i8mm", "i8mm"},
-    {"fphp", "fullfp16"},
-    {"ssbs", "ssbs"},
-    {"sb", "sb"},
-    {"dcpop", "rcpc"},
-    {"flagm", "flagm"},
-    {"dit", "dit"},
-    {"bti", "bti"},
-    {"paca", "pauth"},
-    {nullptr, nullptr}
-};
-
 namespace tp {
 
 const std::string &get_host_cpu_name() {
@@ -474,47 +443,74 @@ const std::string &get_host_cpu_name() {
 FeatureBits get_host_features() {
     FeatureBits features{};
 
-    // Start with the features from the CPU table lookup.
-    // This gives us the full LLVM feature set for the detected CPU.
+    // Start from the CPU table — it has the complete LLVM feature set.
     const auto &cpu = get_host_cpu_name();
     const CPUEntry *entry = find_cpu(cpu.c_str());
     if (entry)
         features = entry->features;
 
-    // Layer on additional features detected from /proc/cpuinfo.
-    // This catches features the kernel reports that might not be in
-    // the CPU table (e.g. newer kernel, different silicon revision).
-    const auto &info = load_cpuinfo();
-    auto feat_line = cpuinfo_field(info, "Features");
-    if (!feat_line.empty()) {
-        bool has_aes = false, has_pmull = false, has_sha1 = false, has_sha2 = false;
+#if !defined(__APPLE__) && !defined(_WIN32)
+    // The kernel may disable features (e.g. nosve boot param, MTE not
+    // enabled). Use hwcap to detect what the kernel actually exposes,
+    // and clear any table features the kernel doesn't report.
+    unsigned long hwcap = getauxval(AT_HWCAP);
+    unsigned long hwcap2 = getauxval(AT_HWCAP2);
 
-        auto tokens = split(feat_line, ' ');
-        for (auto tok : tokens) {
-            if (tok == "aes") has_aes = true;
-            else if (tok == "pmull") has_pmull = true;
-            else if (tok == "sha1") has_sha1 = true;
-            else if (tok == "sha2") has_sha2 = true;
+    // Map hwcap bits → LLVM feature names.
+    // If the kernel doesn't report a hwcap bit, clear the corresponding
+    // LLVM feature from the CPU table.
+    struct HWCapMap { unsigned long bit; bool is_hwcap2; const char *llvm_name; };
+    static const HWCapMap hwcap_map[] = {
+        // HWCAP
+        {1UL <<  0, false, "fp-armv8"},      // HWCAP_FP
+        {1UL <<  1, false, "neon"},          // HWCAP_ASIMD
+        {1UL <<  3, false, "aes"},           // HWCAP_AES
+        {1UL <<  6, false, "sha2"},          // HWCAP_SHA2
+        {1UL <<  7, false, "crc"},           // HWCAP_CRC32
+        {1UL <<  8, false, "lse"},           // HWCAP_ATOMICS
+        {1UL <<  9, false, "fullfp16"},      // HWCAP_FPHP
+        {1UL << 12, false, "rdm"},           // HWCAP_ASIMDRDM
+        {1UL << 13, false, "jsconv"},        // HWCAP_JSCVT
+        {1UL << 15, false, "rcpc"},          // HWCAP_LRCPC
+        {1UL << 17, false, "sha3"},          // HWCAP_SHA3
+        {1UL << 19, false, "sm4"},           // HWCAP_SM4
+        {1UL << 20, false, "dotprod"},       // HWCAP_ASIMDDP
+        {1UL << 22, false, "sve"},           // HWCAP_SVE
+        {1UL << 23, false, "fp16fml"},       // HWCAP_ASIMDFHM
+        {1UL << 24, false, "dit"},           // HWCAP_DIT
+        {1UL << 25, false, "lse2"},          // HWCAP_USCAT
+        {1UL << 26, false, "rcpc-immo"},     // HWCAP_ILRCPC
+        {1UL << 27, false, "flagm"},         // HWCAP_FLAGM
+        {1UL << 28, false, "ssbs"},          // HWCAP_SSBS
+        {1UL << 29, false, "sb"},            // HWCAP_SB
+        {1UL << 30, false, "pauth"},         // HWCAP_PACA
+        // HWCAP2
+        {1UL <<  1, true,  "sve2"},          // HWCAP2_SVE2
+        {1UL <<  2, true,  "sve-aes"},       // HWCAP2_SVEAES
+        {1UL <<  4, true,  "sve-bitperm"},   // HWCAP2_SVEBITPERM
+        {1UL <<  5, true,  "sve2-sha3"},     // HWCAP2_SVESHA3
+        {1UL <<  6, true,  "sve2-sm4"},      // HWCAP2_SVESM4
+        {1UL <<  8, true,  "fptoint"},       // HWCAP2_FRINT
+        {1UL << 13, true,  "i8mm"},          // HWCAP2_I8MM
+        {1UL << 14, true,  "bf16"},          // HWCAP2_BF16
+        {1UL << 16, true,  "rand"},          // HWCAP2_RNG
+        {1UL << 18, true,  "mte"},           // HWCAP2_MTE
+        {1UL << 23, true,  "sme"},           // HWCAP2_SME
+        {1UL << 24, true,  "sme-i16i64"},    // HWCAP2_SME_I16I64
+        {1UL << 25, true,  "sme-f64f64"},    // HWCAP2_SME_F64F64
+        {1UL << 34, true,  "cssc"},          // HWCAP2_CSSC
+        {1UL << 37, true,  "sme2"},          // HWCAP2_SME2
+        {0, false, nullptr}
+    };
 
-            for (const FeatureMap *m = aarch64_feature_map; m->linux_name; m++) {
-                if (tok == m->linux_name) {
-                    const FeatureEntry *fe = find_feature(m->llvm_name);
-                    if (fe) feature_set(&features, fe->bit);
-                    break;
-                }
-            }
-        }
-
-        if (has_aes && has_pmull) {
-            const FeatureEntry *fe = find_feature("aes");
-            if (fe) feature_set(&features, fe->bit);
-        }
-
-        if (has_sha1 && has_sha2) {
-            const FeatureEntry *fe = find_feature("sha2");
-            if (fe) feature_set(&features, fe->bit);
+    for (const auto *m = hwcap_map; m->llvm_name; m++) {
+        unsigned long cap = m->is_hwcap2 ? hwcap2 : hwcap;
+        if (!(cap & m->bit)) {
+            const FeatureEntry *fe = find_feature(m->llvm_name);
+            if (fe) feature_clear(&features, fe->bit);
         }
     }
+#endif
 
     expand_implied(&features);
     return features;
