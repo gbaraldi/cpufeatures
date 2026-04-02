@@ -209,6 +209,11 @@ static void emitFeatureTable(raw_ostream &OS,
         "ermsb", "fsrm",   // tuning hints (REP MOVS speed)
         "nopl",            // baseline assumption, not CPUID-detectable
         "invpcid",         // privileged TLB instruction
+        // aarch64: speculative execution mitigation, not codegen-relevant.
+        // Mandatory from ARMv8.5 but LLVM models it as DefaultExt, so some
+        // CPU definitions (e.g. apple-m4) omit it. Excluding it prevents
+        // false mismatches in sysimage target selection.
+        "ssbs",
         nullptr
     };
     for (const auto &F : Features) {
