@@ -646,7 +646,7 @@ static const FeatureEntry feature_table[] = {
     { "spe-eef", "Enable extra register in the Statistical Profiling Extension", 179, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "specres2", "Enable Speculation Restriction Instruction", 178, 1, { { 0x0ULL, 0x400000000000000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "specrestrict", "Enable architectural speculation restriction", 201, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "ssbs", "Enable Speculative Store Bypass Safe bit", 180, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "ssbs", "Enable Speculative Store Bypass Safe bit", 180, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "ssve-aes", "Enable Armv9.6-A SVE AES support in streaming SVE mode", 181, 0, { { 0x0ULL, 0x0ULL, 0x1000000000ULL, 0x1ULL, 0x0ULL } } },
     { "ssve-bitperm", "Enable Armv9.6-A SVE BitPerm support in streaming SVE mode", 182, 0, { { 0x0ULL, 0x0ULL, 0x1000000000ULL, 0x10ULL, 0x0ULL } } },
     { "ssve-fp8dot2", "Enable SVE2 FP8 2-way dot product instructions", 183, 0, { { 0x400000000000000ULL, 0x0ULL, 0x1000000000ULL, 0x0ULL, 0x0ULL } } },
@@ -722,7 +722,7 @@ static const FeatureEntry feature_table[] = {
 static const unsigned num_features = 309;
 
 // Precomputed mask of hardware (CPUID-detectable) features
-static const FeatureBits hw_feature_mask = { { 0xfd0bc4801c59820dULL, 0xb48e059a8f8400adULL, 0x3c1e281fc000001eULL, 0xf7fe1c068211ULL, 0x0ULL } };
+static const FeatureBits hw_feature_mask = { { 0xfd0bc4801c59820dULL, 0xb48e059a8f8400adULL, 0x3c0e281fc000001eULL, 0xf7fe1c068211ULL, 0x0ULL } };
 
 // CPU table: name, base features (from Implies), full resolved features
 typedef struct {
