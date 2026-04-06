@@ -79,22 +79,7 @@ const std::string &get_host_cpu_name() {
     // Resolve alias and verify the CPU exists in the table.
     // If not, try progressively older CPUs as fallback.
     if (!find_cpu(name)) {
-        // Fallback chain for CPUs not yet in the tables
-        static const struct { const char *from; const char *fallback; } fallbacks[] = {
-            {"apple-m5", "apple-m4"},
-            {"apple-m4", "apple-m3"},
-            {"apple-m3", "apple-m2"},
-            {"apple-m2", "apple-m1"},
-            {nullptr, nullptr}
-        };
-        for (auto *f = fallbacks; f->from; f++) {
-            if (std::strcmp(name, f->from) == 0) {
-                const char *fallback = f->fallback;
-                if (find_cpu(fallback)) { name = fallback; break; }
-            }
-        }
-        if (!find_cpu(name))
-            name = "apple-m1";
+        name = "apple-m1";
     }
 
     cpu_name = name;
