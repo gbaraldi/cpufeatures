@@ -77,7 +77,6 @@ const std::string &get_host_cpu_name() {
     }
 
     // Resolve alias and verify the CPU exists in the table.
-    // If not, try progressively older CPUs as fallback.
     if (!find_cpu(name)) {
         name = "apple-m1";
     }
