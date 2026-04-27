@@ -558,7 +558,10 @@ const std::string &get_host_cpu_name() {
     cpu_name = name;
     return cpu_name;
 }
+} // namespace tp
 #endif // Linux
+
+namespace tp {
 
 FeatureBits get_host_features() {
     FeatureBits features{};
