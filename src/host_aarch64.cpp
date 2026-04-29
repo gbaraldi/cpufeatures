@@ -5,6 +5,8 @@
 #include "target_tables_aarch64.h"
 #include "target_parsing.h"
 
+#include <array>
+#include <cassert>
 #include <cstring>
 #include <vector>
 
@@ -176,6 +178,44 @@ FeatureBits get_host_features() {
     return features;
 }
 
+const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
+    static const char *empty[] = { nullptr };
+    switch (kind) {
+    case HOST_FEATURE_BASELINE: {
+        static const char *names[] = { "fp-armv8", nullptr };
+        return names;
+    }
+    case HOST_FEATURE_DETECTABLE: {
+        constexpr size_t N = sizeof(cap_bit_map) / sizeof(cap_bit_map[0]);
+        static const auto names = []() {
+            std::array<const char *, N + 1> a{};
+            size_t n = 0;
+            for (const auto *m = cap_bit_map; m->llvm_name; m++)
+                a[n++] = m->llvm_name;
+            a[n] = nullptr;
+            return a;
+        }();
+        return names.data();
+    }
+    case HOST_FEATURE_UNDETECTABLE: {
+        static const char *names[] = {
+            // Never present on Apple Silicon.
+            "sve", "sve-aes", "sve-bitperm",
+            "sve2", "sve2-sha3", "sve2-sm4",
+            "mte", "rand", "sm4",
+            // No runtime probe support available yet.
+            "altnzcv", "clrbhb", "faminmax", "lut",
+            "fp8", "fp8dot2", "fp8dot4", "fp8fma", "ls64",
+            "lor", "ras", "predres", "specres2", "specrestrict",
+
+            nullptr
+        };
+        return names;
+    }
+    }
+    return empty;
+}
+
 } // namespace tp
 
 // ============================================================================
@@ -230,6 +270,31 @@ FeatureBits get_host_features() {
 
     _expand_entailed_enable_bits(&features);
     return features;
+}
+
+const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
+    static const char *empty[] = { nullptr };
+    switch (kind) {
+    case HOST_FEATURE_BASELINE: {
+        static const char *names[] = { "neon", "fp-armv8", nullptr };
+        return names;
+    }
+    case HOST_FEATURE_DETECTABLE: {
+        constexpr size_t N = sizeof(pf_cap_map) / sizeof(pf_cap_map[0]);
+        static const auto names = []() {
+            std::array<const char *, N + 1> a{};
+            size_t n = 0;
+            for (const auto *m = pf_cap_map; m->llvm_name; m++)
+                a[n++] = m->llvm_name;
+            a[n] = nullptr;
+            return a;
+        }();
+        return names.data();
+    }
+    case HOST_FEATURE_UNDETECTABLE:
+        return empty;
+    }
+    return empty;
 }
 
 } // namespace tp
@@ -510,6 +575,68 @@ const std::string &get_host_cpu_name() {
     return cpu_name;
 }
 
+// Map hwcap bits → LLVM feature names. If the kernel doesn't report a
+// hwcap bit at runtime, the corresponding LLVM feature is cleared from
+// the CPU-table baseline. Hoisted to file scope so the test-introspection
+// accessor below can derive its name list from the same table.
+struct HWCapMap { unsigned long bit; unsigned char which; const char *llvm_name; };
+static const HWCapMap hwcap_map[] = {
+    // AT_HWCAP
+    {1UL <<  0, 0, "fp-armv8"},      // HWCAP_FP
+    {1UL <<  1, 0, "neon"},          // HWCAP_ASIMD
+    {1UL <<  3, 0, "aes"},           // HWCAP_AES
+    {1UL <<  6, 0, "sha2"},          // HWCAP_SHA2
+    {1UL <<  7, 0, "crc"},           // HWCAP_CRC32
+    {1UL <<  8, 0, "lse"},           // HWCAP_ATOMICS
+    {1UL <<  9, 0, "fullfp16"},      // HWCAP_FPHP
+    {1UL << 12, 0, "rdm"},           // HWCAP_ASIMDRDM
+    {1UL << 13, 0, "jsconv"},        // HWCAP_JSCVT
+    {1UL << 14, 0, "complxnum"},     // HWCAP_FCMA
+    {1UL << 15, 0, "rcpc"},          // HWCAP_LRCPC
+    {1UL << 16, 0, "ccpp"},          // HWCAP_DCPOP (FEAT_DPB)
+    {1UL << 17, 0, "sha3"},          // HWCAP_SHA3
+    {1UL << 19, 0, "sm4"},           // HWCAP_SM4
+    {1UL << 20, 0, "dotprod"},       // HWCAP_ASIMDDP
+    {1UL << 22, 0, "sve"},           // HWCAP_SVE
+    {1UL << 23, 0, "fp16fml"},       // HWCAP_ASIMDFHM
+    {1UL << 24, 0, "dit"},           // HWCAP_DIT
+    {1UL << 25, 0, "lse2"},          // HWCAP_USCAT
+    {1UL << 26, 0, "rcpc-immo"},     // HWCAP_ILRCPC
+    {1UL << 27, 0, "flagm"},         // HWCAP_FLAGM
+    // {1UL << 28, 0, "ssbs"},       // HWCAP_SSBS — not codegen-relevant
+    {1UL << 29, 0, "sb"},            // HWCAP_SB
+    {1UL << 30, 0, "pauth"},         // HWCAP_PACA
+    // AT_HWCAP2
+    {1UL <<  0, 1, "ccdp"},          // HWCAP2_DCPODP (FEAT_DPB2)
+    {1UL <<  1, 1, "sve2"},          // HWCAP2_SVE2
+    {1UL <<  2, 1, "sve-aes"},       // HWCAP2_SVEAES
+    {1UL <<  4, 1, "sve-bitperm"},   // HWCAP2_SVEBITPERM
+    {1UL <<  5, 1, "sve2-sha3"},     // HWCAP2_SVESHA3
+    {1UL <<  6, 1, "sve2-sm4"},      // HWCAP2_SVESM4
+    {1UL <<  7, 1, "altnzcv"},       // HWCAP2_FLAGM2
+    {1UL <<  8, 1, "fptoint"},       // HWCAP2_FRINT
+    {1UL << 13, 1, "i8mm"},          // HWCAP2_I8MM
+    {1UL << 14, 1, "bf16"},          // HWCAP2_BF16
+    {1UL << 16, 1, "rand"},          // HWCAP2_RNG
+    {1UL << 18, 1, "mte"},           // HWCAP2_MTE
+    {1UL << 19, 1, "ecv"},           // HWCAP2_ECV
+    {1UL << 23, 1, "sme"},           // HWCAP2_SME
+    {1UL << 24, 1, "sme-i16i64"},    // HWCAP2_SME_I16I64
+    {1UL << 25, 1, "sme-f64f64"},    // HWCAP2_SME_F64F64
+    {1UL << 31, 1, "wfxt"},          // HWCAP2_WFXT
+    {1UL << 34, 1, "cssc"},          // HWCAP2_CSSC
+    {1UL << 37, 1, "sme2"},          // HWCAP2_SME2
+    {1UL << 49, 1, "lut"},           // HWCAP2_LUT
+    {1UL << 50, 1, "faminmax"},      // HWCAP2_FAMINMAX
+    {1UL << 51, 1, "fp8"},           // HWCAP2_F8CVT
+    {1UL << 52, 1, "fp8fma"},        // HWCAP2_F8FMA
+    {1UL << 53, 1, "fp8dot4"},       // HWCAP2_F8DP4
+    {1UL << 54, 1, "fp8dot2"},       // HWCAP2_F8DP2
+    // AT_HWCAP3
+    {1UL <<  3, 2, "ls64"},          // HWCAP3_LS64 (FEAT_LS64)
+    {0, 0, nullptr}
+};
+
 FeatureBits get_host_features() {
     FeatureBits features{};
 
@@ -523,59 +650,14 @@ FeatureBits get_host_features() {
     // The kernel may disable features (e.g. nosve boot param, MTE not
     // enabled). Use hwcap to detect what the kernel actually exposes,
     // and clear any table features the kernel doesn't report.
-    unsigned long hwcap = getauxval(AT_HWCAP);
-    unsigned long hwcap2 = getauxval(AT_HWCAP2);
-
-    // Map hwcap bits → LLVM feature names.
-    // If the kernel doesn't report a hwcap bit, clear the corresponding
-    // LLVM feature from the CPU table.
-    struct HWCapMap { unsigned long bit; bool is_hwcap2; const char *llvm_name; };
-    static const HWCapMap hwcap_map[] = {
-        // HWCAP
-        {1UL <<  0, false, "fp-armv8"},      // HWCAP_FP
-        {1UL <<  1, false, "neon"},          // HWCAP_ASIMD
-        {1UL <<  3, false, "aes"},           // HWCAP_AES
-        {1UL <<  6, false, "sha2"},          // HWCAP_SHA2
-        {1UL <<  7, false, "crc"},           // HWCAP_CRC32
-        {1UL <<  8, false, "lse"},           // HWCAP_ATOMICS
-        {1UL <<  9, false, "fullfp16"},      // HWCAP_FPHP
-        {1UL << 12, false, "rdm"},           // HWCAP_ASIMDRDM
-        {1UL << 13, false, "jsconv"},        // HWCAP_JSCVT
-        {1UL << 15, false, "rcpc"},          // HWCAP_LRCPC
-        {1UL << 17, false, "sha3"},          // HWCAP_SHA3
-        {1UL << 19, false, "sm4"},           // HWCAP_SM4
-        {1UL << 20, false, "dotprod"},       // HWCAP_ASIMDDP
-        {1UL << 22, false, "sve"},           // HWCAP_SVE
-        {1UL << 23, false, "fp16fml"},       // HWCAP_ASIMDFHM
-        {1UL << 24, false, "dit"},           // HWCAP_DIT
-        {1UL << 25, false, "lse2"},          // HWCAP_USCAT
-        {1UL << 26, false, "rcpc-immo"},     // HWCAP_ILRCPC
-        {1UL << 27, false, "flagm"},         // HWCAP_FLAGM
-        // {1UL << 28, false, "ssbs"},       // HWCAP_SSBS — not codegen-relevant
-        {1UL << 29, false, "sb"},            // HWCAP_SB
-        {1UL << 30, false, "pauth"},         // HWCAP_PACA
-        // HWCAP2
-        {1UL <<  1, true,  "sve2"},          // HWCAP2_SVE2
-        {1UL <<  2, true,  "sve-aes"},       // HWCAP2_SVEAES
-        {1UL <<  4, true,  "sve-bitperm"},   // HWCAP2_SVEBITPERM
-        {1UL <<  5, true,  "sve2-sha3"},     // HWCAP2_SVESHA3
-        {1UL <<  6, true,  "sve2-sm4"},      // HWCAP2_SVESM4
-        {1UL <<  8, true,  "fptoint"},       // HWCAP2_FRINT
-        {1UL << 13, true,  "i8mm"},          // HWCAP2_I8MM
-        {1UL << 14, true,  "bf16"},          // HWCAP2_BF16
-        {1UL << 16, true,  "rand"},          // HWCAP2_RNG
-        {1UL << 18, true,  "mte"},           // HWCAP2_MTE
-        {1UL << 23, true,  "sme"},           // HWCAP2_SME
-        {1UL << 24, true,  "sme-i16i64"},    // HWCAP2_SME_I16I64
-        {1UL << 25, true,  "sme-f64f64"},    // HWCAP2_SME_F64F64
-        {1UL << 34, true,  "cssc"},          // HWCAP2_CSSC
-        {1UL << 37, true,  "sme2"},          // HWCAP2_SME2
-        {0, false, nullptr}
+    unsigned long hwcaps[3] = {
+        getauxval(AT_HWCAP),
+        getauxval(AT_HWCAP2),
+        getauxval(AT_HWCAP3),
     };
 
     for (const auto *m = hwcap_map; m->llvm_name; m++) {
-        unsigned long cap = m->is_hwcap2 ? hwcap2 : hwcap;
-        if (!(cap & m->bit)) {
+        if (!(hwcaps[m->which] & m->bit)) {
             const FeatureEntry *fe = find_feature(m->llvm_name);
             if (fe) feature_clear(&features, fe->bit);
         }
@@ -584,6 +666,35 @@ FeatureBits get_host_features() {
 
     _expand_entailed_enable_bits(&features);
     return features;
+}
+
+const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
+    static const char *empty[] = { nullptr };
+    switch (kind) {
+    case HOST_FEATURE_BASELINE:
+        return empty;
+    case HOST_FEATURE_DETECTABLE: {
+        constexpr size_t N = sizeof(hwcap_map) / sizeof(hwcap_map[0]);
+        static const auto names = []() {
+            std::array<const char *, N + 1> a{};
+            size_t n = 0;
+            for (const auto *m = hwcap_map; m->llvm_name; m++)
+                a[n++] = m->llvm_name;
+            a[n] = nullptr;
+            return a;
+        }();
+        return names.data();
+    }
+    case HOST_FEATURE_UNDETECTABLE: {
+        static const char *names[] = {
+            "clrbhb", "fpac",
+            "lor", "ras", "predres", "specres2", "specrestrict",
+            nullptr
+        };
+        return names;
+    }
+    }
+    return empty;
 }
 
 } // namespace tp
