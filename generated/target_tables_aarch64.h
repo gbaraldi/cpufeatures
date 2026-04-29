@@ -72,6 +72,13 @@ static inline int feature_any(const FeatureBits *fb) {
     return 0;
 }
 
+// Returns 1 if a and b share any set bits, 0 otherwise.
+static inline int feature_intersects(const FeatureBits *a, const FeatureBits *b) {
+    for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
+        if (a->bits[i] & b->bits[i]) return 1;
+    return 0;
+}
+
 static inline unsigned feature_popcount(const FeatureBits *fb) {
     unsigned count = 0;
     for (int i = 0; i < TARGET_FEATURE_WORDS; i++)
@@ -1053,7 +1060,8 @@ CPUFEATURES_UNUSED static const CPUEntry *_find_cpu_exact(const char *name) {
 }
 
 // Expand implied features transitively
-CPUFEATURES_UNUSED static void expand_implied(FeatureBits *bits) {
+// Transitive closure of "For all features added, add anything they require them.".
+CPUFEATURES_UNUSED static void _expand_entailed_enable_bits(FeatureBits *bits) {
     int changed = 1;
     while (changed) {
         changed = 0;
@@ -1062,6 +1070,22 @@ CPUFEATURES_UNUSED static void expand_implied(FeatureBits *bits) {
                 FeatureBits old = *bits;
                 feature_or(bits, &feature_table[i].implies);
                 if (!feature_equal(bits, &old)) changed = 1;
+            }
+        }
+    }
+}
+
+// Expand implied non-features transitively
+// Transitive closure of "For all features removed, remove anything that requires them.".
+CPUFEATURES_UNUSED static void _expand_entailed_disable_bits(FeatureBits *bits) {
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+        for (unsigned i = 0; i < num_features; i++) {
+            if (feature_test(bits, feature_table[i].bit)) continue;
+            if (feature_intersects(&feature_table[i].implies, bits)) {
+                feature_set(bits, feature_table[i].bit);
+                changed = 1;
             }
         }
     }

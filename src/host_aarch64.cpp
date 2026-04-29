@@ -172,7 +172,7 @@ FeatureBits get_host_features() {
         }
     }
 
-    expand_implied(&features);
+    _expand_entailed_enable_bits(&features);
     return features;
 }
 
@@ -228,7 +228,7 @@ FeatureBits get_host_features() {
         if ((fe = find_feature("dotprod"))) feature_set(&features, fe->bit);
     }
 
-    expand_implied(&features);
+    _expand_entailed_enable_bits(&features);
     return features;
 }
 
@@ -582,7 +582,7 @@ FeatureBits get_host_features() {
     }
 #endif
 
-    expand_implied(&features);
+    _expand_entailed_enable_bits(&features);
     return features;
 }
 

@@ -240,7 +240,7 @@ FeatureBits get_host_features() {
     }
 #endif
 
-    expand_implied(&features);
+    _expand_entailed_enable_bits(&features);
     return features;
 }
 

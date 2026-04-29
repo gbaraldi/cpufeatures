@@ -15,6 +15,7 @@ static inline int feature_test(const FeatureBits *, unsigned) { return 0; }
 static inline void feature_set(FeatureBits *, unsigned) {}
 static inline void feature_clear(FeatureBits *, unsigned) {}
 static inline int feature_any(const FeatureBits *) { return 0; }
+static inline int feature_intersects(const FeatureBits *, const FeatureBits *) { return 0; }
 static inline void feature_and_out(FeatureBits *, const FeatureBits *, const FeatureBits *) {}
 static inline void feature_or(FeatureBits *, const FeatureBits *) {}
 static inline void feature_andnot(FeatureBits *, const FeatureBits *, const FeatureBits *) {}
@@ -43,7 +44,8 @@ static const CPUEntry cpu_table[] = {{nullptr, {{0}}, {{0}}, {{0}}}};
 
 static inline const FeatureEntry *find_feature(const char *) { return nullptr; }
 static inline const CPUEntry *_find_cpu_exact(const char *) { return nullptr; }
-static inline void expand_implied(FeatureBits *) {}
+static inline void expand_entailed_enable_bits(FeatureBits *) {}
+static inline void expand_entailed_disable_bits(FeatureBits *) {}
 
 static const FeatureBits hw_feature_mask = {{0}};
 

@@ -565,7 +565,7 @@ FeatureBits get_host_features() {
     }
     features = all_cpu_features;
 
-    expand_implied(&features);
+    _expand_entailed_enable_bits(&features);
     cached = features;
     cached_valid = true;
     return features;
