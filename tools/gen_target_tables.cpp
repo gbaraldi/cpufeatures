@@ -121,6 +121,13 @@ static void emitBitsetType(raw_ostream &OS, unsigned NumWords) {
     OS << "    return 0;\n";
     OS << "}\n\n";
 
+    OS << "// Returns 1 if a and b share any set bits, 0 otherwise.\n";
+    OS << "static inline int feature_intersects(const FeatureBits *a, const FeatureBits *b) {\n";
+    OS << "    for (int i = 0; i < TARGET_FEATURE_WORDS; i++)\n";
+    OS << "        if (a->bits[i] & b->bits[i]) return 1;\n";
+    OS << "    return 0;\n";
+    OS << "}\n\n";
+
     OS << "static inline unsigned feature_popcount(const FeatureBits *fb) {\n";
     OS << "    unsigned count = 0;\n";
     OS << "    for (int i = 0; i < TARGET_FEATURE_WORDS; i++)\n";
@@ -331,7 +338,8 @@ static void emitLookupFunctions(raw_ostream &OS) {
     OS << "}\n\n";
 
     OS << "// Expand implied features transitively\n";
-    OS << "CPUFEATURES_UNUSED static void expand_implied(FeatureBits *bits) {\n";
+    OS << "// Transitive closure of \"For all features added, add anything they require them.\".\n";
+    OS << "CPUFEATURES_UNUSED static void _expand_entailed_enable_bits(FeatureBits *bits) {\n";
     OS << "    int changed = 1;\n";
     OS << "    while (changed) {\n";
     OS << "        changed = 0;\n";
@@ -340,6 +348,22 @@ static void emitLookupFunctions(raw_ostream &OS) {
     OS << "                FeatureBits old = *bits;\n";
     OS << "                feature_or(bits, &feature_table[i].implies);\n";
     OS << "                if (!feature_equal(bits, &old)) changed = 1;\n";
+    OS << "            }\n";
+    OS << "        }\n";
+    OS << "    }\n";
+    OS << "}\n\n";
+
+    OS << "// Expand implied non-features transitively\n";
+    OS << "// Transitive closure of \"For all features removed, remove anything that requires them.\".\n";
+    OS << "CPUFEATURES_UNUSED static void _expand_entailed_disable_bits(FeatureBits *bits) {\n";
+    OS << "    int changed = 1;\n";
+    OS << "    while (changed) {\n";
+    OS << "        changed = 0;\n";
+    OS << "        for (unsigned i = 0; i < num_features; i++) {\n";
+    OS << "            if (feature_test(bits, feature_table[i].bit)) continue;\n";
+    OS << "            if (feature_intersects(&feature_table[i].implies, bits)) {\n";
+    OS << "                feature_set(bits, feature_table[i].bit);\n";
+    OS << "                changed = 1;\n";
     OS << "            }\n";
     OS << "        }\n";
     OS << "    }\n";

@@ -195,6 +195,18 @@ TargetMatch match_targets(const std::vector<LLVMTargetSpec> &targets,
 const std::string &get_host_cpu_name();
 FeatureBits get_host_features();
 
+// Apply the requested feature delta as `(features | to_enable) & ~to_disable`.
+//
+// Disabled features take priority over enabled ones.
+//
+// Accounts for "implied" features that must be enabled / disabled together
+// with the requested bits, e.g. "-avx" implies "-avx2". Functions that compute
+// and apply feature deltas should use this function to keep logically entailed
+// features up to date.
+void apply_feature_delta(FeatureBits *features,
+                         FeatureBits to_enable,
+                         FeatureBits to_disable);
+
 } // namespace tp
 
 #endif // TARGET_PARSING_H

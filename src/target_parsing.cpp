@@ -124,17 +124,12 @@ std::vector<ResolvedTarget> resolve_targets(
 
             const FeatureEntry *fe = find_feature(fname);
             if (fe) {
-                if (enable) {
-                    feature_set(&rt.features, fe->bit);
-                    feature_or(&rt.features, &fe->implies);
-                    expand_implied(&rt.features);
-                } else {
-                    feature_clear(&rt.features, fe->bit);
-                    for (unsigned k = 0; k < num_features; k++) {
-                        if (feature_test(&feature_table[k].implies, fe->bit))
-                            feature_clear(&rt.features, feature_table[k].bit);
-                    }
-                }
+                FeatureBits delta{};
+                feature_set(&delta, fe->bit);
+                if (enable)
+                    apply_feature_delta(&rt.features, delta, FeatureBits{});
+                else
+                    apply_feature_delta(&rt.features, FeatureBits{}, delta);
             } else {
                 if (!rt.ext_features.empty())
                     rt.ext_features += ',';
@@ -291,10 +286,12 @@ static void strip_nondeterministic_features(FeatureBits &features) {
     static const char *features_to_strip[] = {
         "rdrnd", "rdseed", "rtm", "xsaveopt", nullptr
     };
+    FeatureBits to_disable{};
     for (const char **f = features_to_strip; *f; f++) {
         const FeatureEntry *fe = find_feature(*f);
-        if (fe) feature_clear(&features, fe->bit);
+        if (fe) feature_set(&to_disable, fe->bit);
     }
+    apply_feature_delta(&features, FeatureBits{}, to_disable);
 #else
     (void)features;
 #endif
@@ -316,13 +313,8 @@ std::vector<LLVMTargetSpec> resolve_targets_for_llvm(
 
     // 3. Post-process each target
     for (size_t i = 0; i < resolved.size(); i++) {
-        auto &rt = resolved[i];
-
-        // Strip nondeterministic features (rdrnd etc.)
         if (opts.strip_nondeterministic)
-            strip_nondeterministic_features(rt.features);
-
-        expand_implied(&rt.features);
+            strip_nondeterministic_features(resolved[i].features);
     }
 
     // 4. Build LLVM specs with diffs
@@ -485,6 +477,15 @@ void print_cpu_targets() {
     for (unsigned i = 0; i < num_cpus; i++)
         std::printf("  %s\n", cpu_table[i].name);
     std::printf("\nHost CPU: %s\n", get_host_cpu_name().c_str());
+}
+
+void apply_feature_delta(FeatureBits *features,
+                         FeatureBits to_enable,
+                         FeatureBits to_disable) {
+    _expand_entailed_enable_bits(&to_enable);
+    _expand_entailed_disable_bits(&to_disable);
+    feature_or(features, &to_enable);
+    feature_andnot(features, features, &to_disable);
 }
 
 } // namespace tp
