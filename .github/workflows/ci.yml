@@ -85,9 +85,9 @@ jobs:
             make
             mingw-w64-clang-aarch64-toolchain
       - name: Build library
-        run: make lib CXX=clang++ AR=llvm-ar
+        run: make lib CXX=clang++ AR=llvm-ar ARCH=aarch64
       - name: Build and run tests
-        run: make test CXX=clang++ AR=llvm-ar
+        run: make test CXX=clang++ AR=llvm-ar ARCH=aarch64
 
   # macOS x86_64
   build-macos-x86:
