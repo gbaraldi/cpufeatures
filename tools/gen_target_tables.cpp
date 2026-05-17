@@ -423,6 +423,8 @@ static void emitFeatureTable(raw_ostream &OS,
         // aarch64:
         // speculative execution mitigation, not codegen-relevant.
         "ssbs", "ssbs2", "predres", "specrestrict", "specres", "specres2",
+        // behaves as NOP if unsupported by CPU (backwards-compatible)
+        "pauth", "bti",
         // inline assembly only
         "lor", "ras",
         // incorrectly categorized as a feature in LLVM 21

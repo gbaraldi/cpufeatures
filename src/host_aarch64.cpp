@@ -112,7 +112,7 @@ static const CapBitMap cap_bit_map[] = {
     {16,  "rcpc-immo"},    // CAP_BIT_FEAT_LRCPC2
     {17,  "complxnum"},    // CAP_BIT_FEAT_FCMA
     {18,  "jsconv"},       // CAP_BIT_FEAT_JSCVT
-    {19,  "pauth"},        // CAP_BIT_FEAT_PAuth
+    // {19,  "pauth"},     // CAP_BIT_FEAT_PAuth
     // {20, "pauth2"},     // CAP_BIT_FEAT_PAuth2 — no separate LLVM feature
     {21,  "fpac"},         // CAP_BIT_FEAT_FPAC
     {22,  "ccpp"},         // CAP_BIT_FEAT_DPB
@@ -129,7 +129,7 @@ static const CapBitMap cap_bit_map[] = {
     {33,  "dit"},          // CAP_BIT_FEAT_DIT
     {34,  "fullfp16"},     // CAP_BIT_FEAT_FP16
     // {35, "ssbs"},       // CAP_BIT_FEAT_SSBS — not codegen-relevant
-    {36,  "bti"},          // CAP_BIT_FEAT_BTI
+    // {36,  "bti"},          // CAP_BIT_FEAT_BTI
     {40,  "sme"},          // CAP_BIT_FEAT_SME
     {41,  "sme2"},         // CAP_BIT_FEAT_SME2
     {42,  "sme-f64f64"},   // CAP_BIT_FEAT_SME_F64F64
@@ -354,11 +354,11 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
         // HW features LLVM knows about for AArch64 that have no
         // corresponding IsProcessorFeaturePresent flag.
         static const char *names[] = {
-            "altnzcv", "bti", "ccdp", "ccpp", "clrbhb", "complxnum", "cssc",
+            "altnzcv", "ccdp", "ccpp", "clrbhb", "complxnum", "cssc",
             "dit", "ecv", "f8f16mm", "f8f32mm", "faminmax", "flagm",
             "fp16fml", "fp8dot2", "fp8dot4", "fp8fma", "fpac", "fprcvt",
             "fptoint", "gcs", "hbc", "ls64", "lse128", "lsfe", "lut",
-            "mops", "mte", "pauth", "rand",
+            "mops", "mte", "rand",
             "rcpc-immo", "rcpc3", "rdm", "sb", "sme-mop4", "sme-tmop",
             "ssve-fexpa", "sve-f16f32mm", "sve2p2", "wfxt",
             nullptr
@@ -773,7 +773,7 @@ static const HWCapMap hwcap_map[] = {
     {1UL << 27, 0, "flagm"},         // HWCAP_FLAGM
     // {1UL << 28, 0, "ssbs"},       // HWCAP_SSBS — not codegen-relevant
     {1UL << 29, 0, "sb"},            // HWCAP_SB
-    {1UL << 30, 0, "pauth"},         // HWCAP_PACA
+    // {1UL << 30, 0, "pauth"},      // HWCAP_PACA
     {1UL << 32, 0, "gcs"},           // HWCAP_GCS
     {1UL << 34, 0, "fprcvt"},        // HWCAP_FPRCVT
     {1UL << 35, 0, "f8f32mm"},       // HWCAP_F8MM8
@@ -800,7 +800,7 @@ static const HWCapMap hwcap_map[] = {
     {1UL << 13, 1, "i8mm"},          // HWCAP2_I8MM
     {1UL << 14, 1, "bf16"},          // HWCAP2_BF16
     {1UL << 16, 1, "rand"},          // HWCAP2_RNG
-    {1UL << 17, 1, "bti"},           // HWCAP2_BTI
+    // {1UL << 17, 1, "bti"},           // HWCAP2_BTI
     {1UL << 18, 1, "mte"},           // HWCAP2_MTE
     {1UL << 19, 1, "ecv"},           // HWCAP2_ECV
     {1UL << 23, 1, "sme"},           // HWCAP2_SME

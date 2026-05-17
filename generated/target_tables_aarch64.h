@@ -481,7 +481,7 @@ static const FeatureEntry feature_table[] = {
     { "balance-fp-ops", "balance mix of odd and even D-registers for fp multiply(-accumulate) ops", 19, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "bf16", "Enable BFloat16 Extension", 17, 1, 0, 0, 0, { { 0x0ULL, 0x100000000000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "brbe", "Enable Branch Record Buffer Extension", 18, 1, 0, 0, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "bti", "Enable Branch Target Identification", 20, 1, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "bti", "Enable Branch Target Identification", 20, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "call-saved-x10", "Make X10 callee saved.", 33, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "call-saved-x11", "Make X11 callee saved.", 34, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "call-saved-x12", "Make X12 callee saved.", 35, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -603,7 +603,7 @@ static const FeatureEntry feature_table[] = {
     { "outline-atomics", "Enable out of line atomics to support LSE instructions", 116, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pan", "Enable Armv8.1-A Privileged Access-Never extension", 117, 1, 0, 0, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pan-rwv", "Enable Armv8.2-A PAN s1e1R and s1e1W Variants", 118, 1, 0, 0, 1, { { 0x0ULL, 0x20000000000000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "pauth", "Enable Armv8.3-A Pointer Authentication extension", 119, 1, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "pauth", "Enable Armv8.3-A Pointer Authentication extension", 119, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pauth-lr", "Enable Armv9.5-A PAC enhancements", 120, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "pcdphint", "Enable Armv9.6-A Producer Consumer Data Placement hints", 121, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "perfmon", "Enable Armv8.0-A PMUv3 Performance Monitors extension", 123, 1, 0, 0, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -753,10 +753,10 @@ static const FeatureEntry feature_table[] = {
 static const unsigned num_features = 319;
 
 // Precomputed mask of hardware (CPUID-detectable) features
-static const FeatureBits hw_feature_mask = { { 0xdc5e1a0071f6080dULL, 0x8e07febec700affULL, 0xfebffffc000001fdULL, 0x380d007afULL, 0x0ULL } };
+static const FeatureBits hw_feature_mask = { { 0xdc5e1a0071e6080dULL, 0x8607febec700affULL, 0xfebffffc000001fdULL, 0x380d007afULL, 0x0ULL } };
 
 // Codegen-relevant bits: HW features + uarch hints, non-privileged.
-static const FeatureBits llvm_feature_mask = { { 0xdc42120071d20801ULL, 0x801f4be8300a7fULL, 0xfe1ffff400000178ULL, 0x7fffe01000007afULL, 0x0ULL } };
+static const FeatureBits llvm_feature_mask = { { 0xdc42120071c20801ULL, 0x1f4be8300a7fULL, 0xfe1ffff400000178ULL, 0x7fffe01000007afULL, 0x0ULL } };
 
 // Mask of architecture-level uarch features (e.g. v8.4a). Included
 // in the LLVM feature string but ignored for target matching.
