@@ -320,39 +320,43 @@ static std::vector<StringRef> getUArchFeatureNamesAArch64() {
     return Result;
 }
 
-// Compute the HW feature bitset for an AArch64 ArchInfo's DefaultExts.
-// Each ArchInfo (e.g. ARMV9_2A) carries a list of ArchExtKind bits representing
-// the extensions defaulted-on for that architectural level (BF16, I8MM, RME,
-// ... for v9.2-A). We resolve those to LLVM SubtargetFeature names, set the
-// corresponding bits, apply the same forward closure as computeHWMask, and
-// mask through the HW filter so featureset / uarch / privileged / blacklisted
-// bits don't leak into the baseline.
+// Compute the strict mandatory HW feature set at an AArch64 ArchInfo level.
 //
-// Result: the strict mandatory feature set at that ISA level, suitable as a
-// matching target for sysimage selection. Properly differentiated across
-// levels (v9.0-A ⊊ v9.2-A in DefaultExts), unlike per-CPU masks where
-// architectural levels are squashed into uarch tag bits and stripped.
+// Each ArchInfo (e.g. ARMV9_2A) has a corresponding uarch SubtargetFeature
+// ("v9.2a") whose Implies chain — transitively closed — is the set of features
+// mandated by the ARM specification at that ISA level. We seed Result with the
+// uarch bit, run the same forward closure as computeHWMask, and mask through
+// the HW filter so the uarch tag, featureset aliases, privileged-only bits,
+// and blacklisted bits don't leak into the baseline.
+//
+// This is distinct from ArchInfo::DefaultExts, which adds optional extensions
+// LLVM enables by default for -march=...; for "matching" semantics (does the
+// host have at least the features a build needs?) the strict-mandatory set is
+// the right thing to compare against.
+//
+// Properly differentiated across levels (v9.0-A ⊊ v9.2-A), unlike per-CPU
+// masks where architectural levels are squashed into uarch tag bits and
+// stripped.
 static FeatureBitset computeArchBaselineAArch64(
         const llvm::AArch64::ArchInfo *AI,
         ArrayRef<SubtargetFeatureKV> Features,
         const FeatureBitset &HWMask) {
     FeatureBitset Result;
 
-    // Resolve each defaulted ArchExtKind to its LLVM target feature name.
-    for (const auto &Ext : llvm::AArch64::Extensions) {
-        if (!AI->DefaultExts.test(Ext.ID)) continue;
-        StringRef FeatName = Ext.PosTargetFeature;
-        if (!FeatName.empty() && FeatName.front() == '+')
-            FeatName = FeatName.drop_front();
-        for (const auto &F : Features) {
-            if (F.Key == FeatName) {
-                Result.set(F.Value);
-                break;
-            }
+    // Seed with the uarch bit ("v9.2a" etc.) — strip the leading "+" from
+    // ArchInfo::ArchFeature.
+    StringRef ArchFeat = AI->ArchFeature;
+    if (!ArchFeat.empty() && ArchFeat.front() == '+')
+        ArchFeat = ArchFeat.drop_front();
+    for (const auto &F : Features) {
+        if (StringRef(F.Key) == ArchFeat) {
+            Result.set(F.Value);
+            break;
         }
     }
 
-    // Forward closure: anything required by what we already have is in too.
+    // Forward closure: the uarch bit's transitive Implies chain is the strict
+    // mandatory feature set at this ISA level.
     bool changed = true;
     while (changed) {
         changed = false;
@@ -365,7 +369,8 @@ static FeatureBitset computeArchBaselineAArch64(
         }
     }
 
-    // Restrict to HW features (drops uarch / featureset / privileged / blacklisted).
+    // Restrict to HW features (drops the uarch tag itself, featureset
+    // aliases, privileged bits, blacklisted bits).
     Result &= HWMask;
 
     return Result;
