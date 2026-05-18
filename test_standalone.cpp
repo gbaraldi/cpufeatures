@@ -119,6 +119,10 @@ int main() {
                 if (strcmp(fe->name, "fp8") == 0 || strcmp(fe->name, "sm4") == 0)
                     continue;
 #endif
+#if defined(__aarch64__)
+                if (strcmp(fe->name, "chk") == 0) // chk does not need to be detected (in our blacklist)
+                    continue;
+#endif
                 check(false, (std::string("'") + fe->name +
                               "' is implied by a detectable HW bit but is not "
                               "itself detectable or baseline").c_str());

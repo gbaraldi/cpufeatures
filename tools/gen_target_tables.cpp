@@ -161,9 +161,8 @@ static void emitFeatureBits(raw_ostream &OS, const FeatureBitset &Bits, unsigned
 static FeatureBitset computeHWMask(ArrayRef<SubtargetFeatureKV> Features,
                                     ArrayRef<SubtargetSubTypeKV> CPUs,
                                     const FeatureBitset &FeatureSetMask,
-                                    const FeatureBitset &UArchMask,
-                                    const FeatureBitset &ExtraHWMask) {
-    FeatureBitset HWMask = ExtraHWMask;
+                                    const FeatureBitset &UArchMask) {
+    FeatureBitset HWMask;
     FeatureBitset TuneImplied;
     for (const auto &CPU : CPUs) {
         HWMask      |= CPU.Implies.getAsBitset();
@@ -385,18 +384,7 @@ static void emitFeatureTable(raw_ostream &OS,
                               unsigned NumWords) {
     FeatureBitset FeatureSetMask = computeFeatureFeatureSetMask(Arch, Features);
     FeatureBitset UArchMask = computeUArchMask(Arch, Features);
-
-    // Whitelist any HW feature bits that are not covered by the `computeHWMask` heuristic
-    FeatureBitset ExtraHWMask;
-    if (Arch == "aarch64") {
-        for (const auto &F : Features) {
-            if (StringRef(F.Key) == "chk")
-                ExtraHWMask.set(F.Value);
-        }
-    }
-
-    FeatureBitset HWMask = computeHWMask(Features, CPUs, FeatureSetMask,
-                                          UArchMask, ExtraHWMask);
+    FeatureBitset HWMask = computeHWMask(Features, CPUs, FeatureSetMask, UArchMask);
     FeatureBitset PrivilegedMask = computePrivilegedMask(Arch, Features);
 
     OS << "// Feature table: name, description, bit index, is_hw, is_featureset,\n";
@@ -423,8 +411,8 @@ static void emitFeatureTable(raw_ostream &OS,
         // aarch64:
         // speculative execution mitigation, not codegen-relevant.
         "ssbs", "ssbs2", "predres", "specrestrict", "specres", "specres2",
-        // behaves as NOP if unsupported by CPU (backwards-compatible)
-        "pauth", "bti",
+        // behaves as NOP if unsupported by CPU (HINT / backwards-compatible)
+        "pauth", "bti", "clrbhb", "chk", "pauth-lr", "pcdphint",
         // inline assembly only
         "lor", "ras",
         // incorrectly categorized as a feature in LLVM 21
