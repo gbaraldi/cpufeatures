@@ -495,8 +495,8 @@ static const FeatureEntry feature_table[] = {
     { "ccdp", "Enable Armv8.5-A Cache Clean to Point of Deep Persistence", 30, 1, 0, 0, 0, { { 0x400000ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "ccidx", "Enable Armv8.3-A Extend of the CCSIDR number of sets", 21, 1, 0, 0, 1, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "ccpp", "Enable Armv8.2-A data Cache Clean to Point of Persistence", 22, 1, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "chk", "Enable Armv8.0-A Check Feature Status Extension", 23, 1, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
-    { "clrbhb", "Enable Clear BHB instruction", 24, 1, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "chk", "Enable Armv8.0-A Check Feature Status Extension", 23, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
+    { "clrbhb", "Enable Clear BHB instruction", 24, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "cmp-bcc-fusion", "CPU fuses cmp+bcc operations", 40, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "cmpbr", "Enable Armv9.6-A base compare and branch instructions", 25, 0, 0, 0, 0, { { 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
     { "complxnum", "Enable Armv8.3-A Floating-point complex number support", 41, 1, 0, 0, 0, { { 0x0ULL, 0x100000000000ULL, 0x0ULL, 0x0ULL, 0x0ULL } } },
@@ -753,10 +753,10 @@ static const FeatureEntry feature_table[] = {
 static const unsigned num_features = 319;
 
 // Precomputed mask of hardware (CPUID-detectable) features
-static const FeatureBits hw_feature_mask = { { 0xdc5e1a0071e6080dULL, 0x8607febec700affULL, 0xfebffffc000001fdULL, 0x380d007afULL, 0x0ULL } };
+static const FeatureBits hw_feature_mask = { { 0xdc5e1a007066080dULL, 0x8607febec700affULL, 0xfebffffc000001fdULL, 0x380d007afULL, 0x0ULL } };
 
 // Codegen-relevant bits: HW features + uarch hints, non-privileged.
-static const FeatureBits llvm_feature_mask = { { 0xdc42120071c20801ULL, 0x1f4be8300a7fULL, 0xfe1ffff400000178ULL, 0x7fffe01000007afULL, 0x0ULL } };
+static const FeatureBits llvm_feature_mask = { { 0xdc42120070420801ULL, 0x1f4be8300a7fULL, 0xfe1ffff400000178ULL, 0x7fffe01000007afULL, 0x0ULL } };
 
 // Mask of architecture-level uarch features (e.g. v8.4a). Included
 // in the LLVM feature string but ignored for target matching.

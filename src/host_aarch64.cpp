@@ -207,10 +207,7 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
     static const char *empty[] = { nullptr };
     switch (kind) {
     case HOST_FEATURE_BASELINE: {
-        static const char *names[] = {
-            "fp-armv8", "chk",
-            nullptr
-        };
+        static const char *names[] = { "fp-armv8", nullptr };
         return names;
     }
     case HOST_FEATURE_DETECTABLE: {
@@ -232,7 +229,7 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
             "sve2", "sve-sha3", "sve-sm4",
             "rand", "sm4",
             // No runtime probe support available yet.
-            "clrbhb", "faminmax", "lut",
+            "faminmax", "lut",
             "fp8", "fp8dot2", "fp8dot4", "fp8fma", "ls64",
             "sme-f8f16", "sme-f8f32",
             "mops",
@@ -335,7 +332,7 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
     static const char *empty[] = { nullptr };
     switch (kind) {
     case HOST_FEATURE_BASELINE: {
-        static const char *names[] = { "neon", "fp-armv8", "chk", nullptr };
+        static const char *names[] = { "neon", "fp-armv8", nullptr };
         return names;
     }
     case HOST_FEATURE_DETECTABLE: {
@@ -354,7 +351,7 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
         // HW features LLVM knows about for AArch64 that have no
         // corresponding IsProcessorFeaturePresent flag.
         static const char *names[] = {
-            "altnzcv", "ccdp", "ccpp", "clrbhb", "complxnum", "cssc",
+            "altnzcv", "ccdp", "ccpp", "complxnum", "cssc",
             "dit", "ecv", "f8f16mm", "f8f32mm", "faminmax", "flagm",
             "fp16fml", "fp8dot2", "fp8dot4", "fp8fma", "fpac", "fprcvt",
             "fptoint", "gcs", "hbc", "ls64", "lse128", "lsfe", "lut",
@@ -819,7 +816,7 @@ static const HWCapMap hwcap_map[] = {
     {1UL << 45, 1, "sve-b16b16"},    // HWCAP2_SVE_B16B16
     {1UL << 46, 1, "rcpc3"},         // HWCAP2_LRCPC3
     {1UL << 47, 1, "lse128"},        // HWCAP2_LSE128
-    {1UL << 48, 1, "clrbhb"},        // HWCAP2_CLRBHB
+    // {1UL << 48, 1, "clrbhb"},     // HWCAP2_CLRBHB
     {1UL << 49, 1, "lut"},           // HWCAP2_LUT
     {1UL << 50, 1, "faminmax"},      // HWCAP2_FAMINMAX
     {1UL << 51, 1, "fp8"},           // HWCAP2_F8CVT
@@ -892,7 +889,7 @@ const char *const *get_host_feature_detection(HostFeatureDetectionKind kind) {
     static const char *empty[] = { nullptr };
     switch (kind) {
     case HOST_FEATURE_BASELINE: {
-        static const char *names[] = { "chk", nullptr };
+        static const char *names[] = { nullptr };
         return names;
     }
     case HOST_FEATURE_DETECTABLE: {
